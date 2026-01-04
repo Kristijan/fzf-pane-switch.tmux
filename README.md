@@ -1,6 +1,6 @@
 # tmux-fzf-pane-switch
 
-![Screenshot of the fzf window listing all tmux panes for selection and switching.](assets/screenshot.png)
+![Demonstration of tmux-fzf-pane-switch in action](assets/tmux-fzf-pane-switch-demo.gif)
 
 Switch to any TMUX pane, in any session, by searching and filtering using fzf.
 
