@@ -34,7 +34,12 @@ function select_pane() {
 
     # Check if we're using the fzf preview pane
     if [[ "${1}" = 'true' ]]; then
-        preview="--preview 'tmux capture-pane -ep -t {1}' --preview-window=${3}"
+        preview="--preview '"
+        preview+="tmux capture-pane -ep -S -\$(( \${FZF_PREVIEW_LINES:-30} )) -t {1} | "
+        # The awk below removes trailing empty/whitespace-only lines by finding the last non-empty line and printing up to that point
+        preview+="awk \"{a[NR]=\\\$0} END{for(i=NR;i>0;i--) if(a[i]~/[^ \\t]/){for(j=1;j<=i;j++) print a[j]; exit}}\" | "
+        preview+="tail -n \$(( \${FZF_PREVIEW_LINES:-30} ))"
+        preview+="' --preview-window=${3}"
     fi
 
     # Launch switcher
