@@ -48,7 +48,7 @@ Default is `prefix + s`, which replaces the tmux default session select (tmux de
 set -g @fzf_pane_switch_window-position "position"
 ```
 
-Default is `center,70%,80%`. You can use any options allowed [here](https://man.archlinux.org/man/fzf.1.en#tmux).
+Default is `center,70%,80%`. You can use any options allowed [https://man.archlinux.org/man/fzf.1.en#tmux](https://man.archlinux.org/man/fzf.1.en#tmux).
 
 ### fzf pane preview
 
@@ -66,7 +66,7 @@ Only when `@fzf_pane_switch_preview-pane` is `true`.
 set -g @fzf_pane_switch_preview-pane-position "position"
 ```
 
-Default is `right,,,nowrap`. You can use any options allowed [here](https://man.archlinux.org/man/fzf.1.en#preview~3).
+Default is `right,,,nowrap`. You can use any options allowed [https://man.archlinux.org/man/fzf.1.en#preview~3](https://man.archlinux.org/man/fzf.1.en#preview~3).
 
 ### tmux list-panes format
 
@@ -79,16 +79,18 @@ set -g @fzf_pane_switch_list-panes-format "FORMATS"
 Default is `pane_id session_name window_name pane_title pane_current_command`.
 
 > [!TIP]
-> You can use any tmux FORMAT option allowed [here](https://www.man7.org/linux/man-pages/man1/tmux.1.html#FORMATS). String manipulation should also work. For example, the `pane_id` by default is shown with a leading percent symbol (e.g. `%3`). You can remove this by setting `set -g @fzf_pane_switch_list-panes-format "s/%//:pane_id session_name window_name pane_title pane_current_command"`
+> You can use any tmux FORMAT option allowed [https://www.man7.org/linux/man-pages/man1/tmux.1.html#FORMATS](https://www.man7.org/linux/man-pages/man1/tmux.1.html#FORMATS). String manipulation should also work. For example, the `pane_id` by default is shown with a leading percent symbol (e.g. `%3`). You can remove this by setting `set -g @fzf_pane_switch_list-panes-format "s/%//:pane_id session_name window_name pane_title pane_current_command"`
 
-## Tools used in image
+## Tools used in demonstration
 
-* Terminal is [Ghostty](https://ghostty.org)
 * TMUX theme is [catppuccin](https://github.com/catppuccin/tmux) mocha.
 * ZSH shell prompt is [starship](https://starship.rs)
 * `fzf` theme is [catppuccin](https://github.com/catppuccin/fzf) mocha.
-* `ls` output in pane is [eza](https://github.com/eza-community/eza)
 
-## Acknowledgments
+## Inspiration
 
 I pretty much retrofitted the [brokenricefilms/tmux-fzf-session-switch](https://github.com/brokenricefilms/tmux-fzf-session-switch) TPM plugin. So, if you're looking for something to switch tmux sessions only, go check it out.
+
+## Other plugins
+
+Check out my other plugin [tmux-flash-copy](https://github.com/Kristijan/tmux-flash-copy), that enables you to search visible words in the current tmux pane, then copy that word to the system clipboard by pressing the associated label key.
