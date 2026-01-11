@@ -1,4 +1,6 @@
-# tmux-fzf-pane-switch
+<h1 align="center">
+    🔀 TMUX FZF Pane Switch
+</h1>
 
 ![Demonstration of tmux-fzf-pane-switch in action](assets/tmux-fzf-pane-switch-demo.gif)
 
@@ -16,19 +18,50 @@ Search and filter on any pane details, such as (but not limited to) the `#{windo
 
 ## Installation
 
-1. Install [TPM](https://github.com/tmux-plugins/tpm).
+### Using TPM (recommended)
 
-2. Add the plugin to your `tmux.conf` file.
+1. Install [TPM (Tmux Plugin Manager)](https://github.com/tmux-plugins/tpm).
+
+2. Add `tmux-fzf-pane-switch` to your `~/.tmux.conf`:
 
     ```bash
-    set -g @plugin 'kristijan/tmux-fzf-pane-switch'
+    set -g @plugin 'kristijan/fzf-pane-switch.tmux'
     ```
 
-3. Start tmux and install plugin.
+3. Start tmux and install the plugin.
 
-    _Press `prefix + I` (capital i, as in Install) to fetch the plugin._
+    Press `<tmux_prefix> + I` (capital i, as in Install) to install the plugin.
 
-    _Press `prefix + U` (capital u, as in Update) to update the plugin._
+    Press `<tmux_prefix> + U` (capital u, as in Update) to update the plugin.
+
+### Manual installation
+
+1. Clone this repository to your desired location:
+
+    ```bash
+    git clone https://github.com/kristijan/fzf-pane-switch.tmux.git ~/.tmux/plugins/fzf-pane-switch.tmux
+    ```
+
+2. Add the following to your `~/.tmux.conf`:
+
+    ```bash
+    run-shell ~/.tmux/plugins/fzf-pane-switch.tmux/select_pane.tmux
+    ```
+
+    Any customisation variables should be set **BEFORE** the `run-shell` line so they're correctly sourced.
+
+    For example:
+
+    ```bash
+    set -g @fzf_pane_switch_list-panes-format "session_name window_name pane_title pane_current_command"
+    run-shell ~/.tmux/plugins/fzf-pane-switch.tmux/select_pane.tmux
+    ```
+
+3. Reload your tmux configuration:
+
+    ```bash
+    tmux source-file ~/.tmux.conf
+    ```
 
 ## Customise
 
@@ -93,4 +126,4 @@ I pretty much retrofitted the [brokenricefilms/tmux-fzf-session-switch](https://
 
 ## Other plugins
 
-Check out my other plugin [tmux-flash-copy](https://github.com/Kristijan/tmux-flash-copy), that enables you to search visible words in the current tmux pane, then copy that word to the system clipboard by pressing the associated label key.
+Check out my other plugin [TMUX Flash Copy](https://github.com/Kristijan/flash-copy.tmux), that enables you to search visible words in the current tmux pane, then copy that word to the system clipboard by pressing the associated label key.
