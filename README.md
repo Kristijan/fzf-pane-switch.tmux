@@ -21,6 +21,8 @@ Search and filter on any pane details, such as (but not limited to) the <code>#{
 - [fzf](https://github.com/junegunn/fzf) >= 0.71.0
 - [tmux](https://github.com/tmux/tmux) >= 3.3
 
+Backdrop dimming is optional and requires fzf >= 0.74.5 and tmux >= 3.8.
+
 _I've tested this plugin with tmux 3.7c and fzf 0.74.3._
 
 ## Installation
@@ -90,6 +92,7 @@ Set plugin options in `tmux.conf` before loading the plugin. See
 | [`@fzf_pane_switch_bind-key`](CONFIGURATION.md#fzf_pane_switch_bind-key)                           | tmux key binding that opens the pane switcher.               |
 | [`@fzf_pane_switch_bind-key-mode`](CONFIGURATION.md#fzf_pane_switch_bind-key-mode)                 | Selects a prefix or root key binding.                        |
 | [`@fzf_pane_switch_window-position`](CONFIGURATION.md#fzf_pane_switch_window-position)             | Size and position of the fzf tmux popup.                     |
+| [`@fzf_pane_switch_backdrop-dim`](CONFIGURATION.md#fzf_pane_switch_backdrop-dim)                   | Dims panes behind the pane switcher.                         |
 | [`@fzf_pane_switch_preview-pane`](CONFIGURATION.md#fzf_pane_switch_preview-pane)                   | Shows a preview of the highlighted pane.                     |
 | [`@fzf_pane_switch_preview-pane-start`](CONFIGURATION.md#fzf_pane_switch_preview-pane-start)       | Sets whether an enabled preview starts visible or hidden.    |
 | [`@fzf_pane_switch_preview-pane-match`](CONFIGURATION.md#fzf_pane_switch_preview-pane-match)       | Includes captured pane content in fuzzy matching.            |
@@ -140,7 +143,7 @@ bats --pretty tests
 
 The suite uses included `tmux` and `fzf` stubs, so it does not require a running tmux server or a local fzf installation.
 
-An opt-in integration test requires real tmux, fzf, and Python 3. It exercises capture, filtering, and generation cleanup on an isolated tmux server. Its PTY case launches the actual popup and presses `Ctrl-R`, verifying that refreshed indexing returns to ready:
+An opt-in integration test requires real tmux, fzf, and Python 3. It exercises capture, filtering, and generation cleanup on an isolated tmux server. Its PTY cases launch the switcher, verify `Ctrl-R` indexing, and exercise floating-pane focus, backdrop cleanup, and stale-state recovery:
 
 ```bash
 RUN_FZF_PANE_SWITCH_INTEGRATION=true bats tests/integration

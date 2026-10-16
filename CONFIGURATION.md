@@ -55,6 +55,20 @@ set -g @fzf_pane_switch_window-position "center,70%,80%"
 
 See fzf's [`--tmux` documentation](https://man.archlinux.org/man/fzf.1.en#tmux) for accepted values.
 
+### `@fzf_pane_switch_backdrop-dim`
+
+| Setting              | Options        | Default |
+| -------------------- | -------------- | ------- |
+| Backdrop dim opacity | `1%` to `100%` | Unset   |
+
+```bash
+set -g @fzf_pane_switch_backdrop-dim "60%"
+```
+
+When set, the switcher opens as a non-modal tmux floating pane and dims the other pane contents in its originating window while the switcher has focus. Moving focus to another pane removes the dimming; returning focus reapplies it. The floating pane uses tmux's native border, while the configured `@fzf_pane_switch_window-position` continues to control its size and position.
+
+This mode requires tmux 3.8 or later and fzf 0.74.5 or later.
+
 ### `@fzf_pane_switch_preview-pane`
 
 | Setting      | Options         | Default |

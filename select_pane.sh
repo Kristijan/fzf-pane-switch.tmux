@@ -15,6 +15,18 @@ tree_window_colours=''
 tree_pane_colours=''
 match_directory=''
 match_owner_magic='fzf-pane-switch-v1'
+backdrop_window=''
+backdrop_owner=''
+backdrop_previous_style=''
+backdrop_previous_style_was_local=false
+backdrop_installed_style=''
+backdrop_hook=''
+backdrop_owner_option='@fzf_pane_switch_backdrop-owner'
+backdrop_pane_option='@fzf_pane_switch_backdrop'
+backdrop_was_local_option='@fzf_pane_switch_backdrop-was-local'
+backdrop_previous_style_option='@fzf_pane_switch_backdrop-previous-style'
+backdrop_installed_style_option='@fzf_pane_switch_backdrop-installed-style'
+backdrop_hook_option='@fzf_pane_switch_backdrop-hook'
 
 # Converts a supported named or six-digit hexadecimal colour to an ANSI code.
 function colour_to_ansi() {
@@ -770,6 +782,218 @@ function cleanup_match_directory() {
     match_directory=''
 }
 
+# Escapes arbitrary text for use as one literal tmux format operand.
+function format_literal() {
+    local value="$1"
+    value="${value//#/##}"
+    value="${value//,/#,}"
+    value="${value//\}/#\}}"
+    printf '%s' "${value}"
+}
+
+# Clears the window-scoped recovery record in one server command list.
+function clear_backdrop_metadata() {
+    local window="$1" option
+    local -a commands=()
+    for option in \
+        "${backdrop_owner_option}" \
+        "${backdrop_was_local_option}" \
+        "${backdrop_previous_style_option}" \
+        "${backdrop_installed_style_option}" \
+        "${backdrop_hook_option}"; do
+        [[ "${2:-}" == keep-owner && "${option}" == "${backdrop_owner_option}" ]] && continue
+        [[ ${#commands[@]} -eq 0 ]] || commands+=(';')
+        commands+=(set-option -wu -t "${window}" "${option}")
+    done
+    tmux "${commands[@]}" 2>/dev/null
+}
+
+# Restores a recorded backdrop only if its conditional style is still intact.
+# A user or plugin change made after installation therefore wins.
+function restore_backdrop_state() {
+    local window="$1" owner="$2" was_local="$3" previous_style="$4" installed_style="$5" hook="$6"
+    local expected_hook expected_command restore_command
+    if [[ -n "${installed_style}" ]]; then
+        if [[ "${was_local}" == true ]]; then
+            restore_command="set-option -w -t ${window} window-style $(shell_quote "${previous_style}")"
+        else
+            restore_command="set-option -wu -t ${window} window-style"
+        fi
+        tmux if-shell -F -t "${window}" \
+            "#{==:#{window-style},$(format_literal "${installed_style}")}" \
+            "${restore_command}" 2>/dev/null
+    fi
+    expected_hook="window-pane-changed[fzf-pane-switch-${owner%%:*}]"
+    expected_command="set-option -Fw -t ${window} window-style \"#{window-style}\""
+    if [[ "${hook}" == "${expected_hook}" ]]; then
+        tmux if-shell -F -t "${window}" \
+            "#{==:#{${hook}},$(format_literal "${expected_command}")}" \
+            "set-hook -wu -t ${window} $(shell_quote "${hook}")" 2>/dev/null
+    fi
+    clear_backdrop_metadata "${window}" "${7:-}"
+}
+
+# Reclaims a backdrop record whose switcher process no longer exists. A live
+# owner keeps the one-switcher-per-window invariant.
+function recover_stale_backdrop() {
+    local window="$1" owner was_local previous_style installed_style hook claimed_owner claim owner_format
+    owner="$(tmux show-option -wqv -t "${window}" "${backdrop_owner_option}")"
+    local owner_pid="${owner%%:*}" owner_start
+    owner_start=''
+    [[ "${owner_pid}" =~ ^[1-9][0-9]*$ ]] && owner_start="$(ps -p "${owner_pid}" -o lstart= 2>/dev/null)"
+    if [[ "${owner}" == "${owner_pid}:${owner_start}" && -n "${owner_start}" ]] ||
+        { [[ "${owner}" =~ ^[1-9][0-9]*$ ]] && kill -0 "${owner}" 2>/dev/null; }; then
+        tmux display-message 'Pane switcher is already open in this window'
+        return 1
+    fi
+
+    if [[ -n "${owner}" ]]; then
+        was_local="$(tmux show-option -wqv -t "${window}" "${backdrop_was_local_option}")"
+        previous_style="$(tmux show-option -wqv -t "${window}" "${backdrop_previous_style_option}")"
+        installed_style="$(tmux show-option -wqv -t "${window}" "${backdrop_installed_style_option}")"
+        hook="$(tmux show-option -wqv -t "${window}" "${backdrop_hook_option}")"
+    fi
+    # The comparison and replacement execute together on tmux's server queue.
+    # A second launcher cannot clear or reclaim the winning launcher's state.
+    claim="set-option -wq -t ${window} ${backdrop_owner_option} $(shell_quote "${backdrop_owner}")"
+    owner_format="${owner//#/##}"
+    owner_format="${owner_format//,/#,}"
+    owner_format="${owner_format//\}/#\}}"
+    claimed_owner="$(tmux if-shell -F -t "${window}" \
+        "#{==:#{${backdrop_owner_option}},${owner_format}}" "${claim}" \; \
+        show-option -wqv -t "${window}" "${backdrop_owner_option}")"
+    if [[ "${claimed_owner}" != "${backdrop_owner}" ]]; then
+        backdrop_owner=''
+        tmux display-message 'Pane switcher is already open in this window'
+        return 1
+    fi
+    if [[ -n "${owner}" ]]; then
+        restore_backdrop_state "${window}" "${owner}" "${was_local}" \
+            "${previous_style}" "${installed_style}" "${hook}" keep-owner
+    fi
+}
+
+# Applies a conditional window style while the marked floating switcher is the
+# active pane. The original local/inherited state is retained for cleanup.
+function setup_backdrop() {
+    local local_style_line condition hook_command installation argument installed process_start
+    local -a installation_commands
+    backdrop_window="$(tmux display-message -p -t "${TMUX_PANE:?missing origin pane}" '#{window_id}')" || return 1
+    [[ -n "${backdrop_window}" ]] || return 1
+
+    process_start="$(ps -p "$$" -o lstart= 2>/dev/null)"
+    if [[ -z "${process_start}" ]]; then
+        tmux display-message 'Unable to identify pane switcher process'
+        return 1
+    fi
+    backdrop_owner="$$:${process_start}"
+    recover_stale_backdrop "${backdrop_window}" || return 1
+
+    local_style_line="$(tmux show-option -wq -t "${backdrop_window}" window-style)"
+    if [[ -n "${local_style_line}" ]]; then
+        backdrop_previous_style_was_local=true
+        backdrop_previous_style="$(tmux show-option -wqv -t "${backdrop_window}" window-style)"
+    else
+        backdrop_previous_style_was_local=false
+        backdrop_previous_style="$(tmux show-option -Awqv -t "${backdrop_window}" window-style)"
+    fi
+
+    condition="#{?#{&&:#{!:#{pane_active}},#{m:*1*,#{P:#{&&:#{pane_active},#{${backdrop_pane_option}}}}}},dim=${backdrop_dim},}"
+    backdrop_installed_style="${backdrop_previous_style} ${condition}"
+    backdrop_hook="window-pane-changed[fzf-pane-switch-$$]"
+    hook_command="set-option -wF -t ${backdrop_window} window-style '#{window-style}'"
+
+    installation_commands=(
+        set-option -wq -t "${backdrop_window}" "${backdrop_was_local_option}" "${backdrop_previous_style_was_local}" ';'
+        set-option -wq -t "${backdrop_window}" "${backdrop_previous_style_option}" "${backdrop_previous_style}" ';'
+        set-option -wq -t "${backdrop_window}" "${backdrop_installed_style_option}" "${backdrop_installed_style}" ';'
+        set-option -wq -t "${backdrop_window}" "${backdrop_hook_option}" "${backdrop_hook}" ';'
+        set-hook -w -t "${backdrop_window}" "${backdrop_hook}" "${hook_command}" ';'
+        set-option -w -t "${backdrop_window}" window-style "${backdrop_installed_style}"
+        ';' display-message -p installed
+    )
+    installation=''
+    for argument in "${installation_commands[@]}"; do
+        if [[ "${argument}" == ';' ]]; then
+            installation+=' ; '
+        else
+            argument="${argument//\'/\'\\\'\'}"
+            installation+=" '${argument}'"
+        fi
+    done
+    # Abort setup if another actor changed the style since our snapshot. The
+    # comparison and installation run on the same server command queue.
+    installed="$(tmux if-shell -F -t "${backdrop_window}" \
+        "#{==:#{window-style},$(format_literal "${backdrop_previous_style}")}" \
+        "${installation}" "display-message 'Window style changed while opening pane switcher'")"
+    if [[ "${installed}" != installed ]]; then
+        cleanup_backdrop
+        return 1
+    fi
+}
+
+# Restores only state that is still owned by this invocation. A concurrent
+# window-style change is left intact.
+function cleanup_backdrop() {
+    local current_owner
+    [[ -n "${backdrop_window}" ]] || return 0
+    current_owner="$(tmux show-option -wqv -t "${backdrop_window}" "${backdrop_owner_option}" 2>/dev/null)"
+    [[ -n "${backdrop_owner}" && "${current_owner}" == "${backdrop_owner}" ]] || return 0
+
+    restore_backdrop_state "${backdrop_window}" "${backdrop_owner}" \
+        "${backdrop_previous_style_was_local}" "${backdrop_previous_style}" \
+        "${backdrop_installed_style}" "${backdrop_hook}"
+    backdrop_window=''
+}
+
+function cleanup_invocation() {
+    cleanup_match_directory
+    cleanup_backdrop
+}
+
+# Resolves a tree session or window to a tiled pane for preview capture. The
+# originating scope is pinned to the pane that opened the switcher because the
+# floating switcher becomes tmux's active pane after fzf starts.
+function resolve_preview_target() {
+    local target="$1" origin_pane="$2" origin_scope=''
+    local pane_id floating active last first_tiled='' active_tiled='' last_tiled=''
+
+    case "${target}" in
+        %*)
+            printf '%s\n' "${target}"
+            return
+            ;;
+        @*)
+            origin_scope="$(tmux display-message -p -t "${origin_pane}" '#{window_id}' 2>/dev/null)"
+            ;;
+        \$*)
+            origin_scope="$(tmux display-message -p -t "${origin_pane}" '#{session_id}' 2>/dev/null)"
+            ;;
+    esac
+
+    if [[ -n "${origin_scope}" && "${target}" == "${origin_scope}" ]]; then
+        printf '%s\n' "${origin_pane}"
+        return
+    fi
+
+    while read -r pane_id floating active last; do
+        [[ "${floating}" == 1 ]] && continue
+        [[ -n "${first_tiled}" ]] || first_tiled="${pane_id}"
+        [[ "${active}" == 1 ]] && active_tiled="${pane_id}"
+        [[ "${last}" == 1 ]] && last_tiled="${pane_id}"
+    done < <(tmux list-panes -t "${target}" -F '#{pane_id} #{pane_floating_flag} #{pane_active} #{pane_last}')
+
+    if [[ -n "${active_tiled}" ]]; then
+        printf '%s\n' "${active_tiled}"
+    elif [[ -n "${last_tiled}" ]]; then
+        printf '%s\n' "${last_tiled}"
+    elif [[ -n "${first_tiled}" ]]; then
+        printf '%s\n' "${first_tiled}"
+    else
+        return 1
+    fi
+}
+
 # Quotes a value so it can be passed safely as one argument in a shell command.
 function shell_quote() {
     local value="$1"
@@ -854,10 +1078,19 @@ function is_valid_positional_style() {
     done
 }
 
+# Targets the originating client when the switcher runs in the background.
+function switch_to_pane() {
+    if [[ -n "${backdrop_dim:-}" && -n "${origin_client:-}" ]]; then
+        tmux switch-client -c "${origin_client}" -t "$1"
+    else
+        tmux switch-client -t "$1"
+    fi
+}
+
 # Configures fzf, handles optional actions, and switches to the selected pane.
 function select_pane() {
     local action_index footer_text pane pane_id node_type preview_command preview_window refresh_binding reload_command script_path
-    local quoted_script quoted_directory filter_command index_command refresh_command enter_command label_command list_label
+    local quoted_script quoted_directory quoted_origin filter_command index_command refresh_command enter_command label_command list_label backdrop_start_command start_binding
     local content_matching="${10}"
     local -a border_styling=(
         --input-border "--input-label= Search " --info=inline-right
@@ -866,11 +1099,20 @@ function select_pane() {
         "--ghost=type to search..."
     ) footer_keys=('Enter') footer_labels=('Switch') fzf_args preview_args=()
 
+    if [[ "${content_matching}" == 'true' || -n "${backdrop_dim:-}" ]]; then
+        trap cleanup_invocation EXIT
+        trap 'exit 130' HUP INT TERM
+    fi
+    if [[ -n "${backdrop_dim:-}" ]]; then
+        setup_backdrop || return 1
+    fi
+
     if [[ "${content_matching}" == 'true' ]]; then
-        trap cleanup_match_directory EXIT HUP INT TERM
         if ! create_match_directory; then
             cleanup_match_directory
-            trap - EXIT HUP INT TERM
+            if [[ -z "${backdrop_dim:-}" ]]; then
+                trap - EXIT HUP INT TERM
+            fi
             tmux display-message 'Pane-content matching unavailable; using pane details only'
             content_matching='false'
         fi
@@ -886,7 +1128,15 @@ function select_pane() {
         if [[ "${9}" == 'hidden' ]]; then
             preview_window+=',hidden'
         fi
-        preview_command="tmux capture-pane -ep -S -\$(( \${FZF_PREVIEW_LINES:-30} )) -t {1} | "
+        if [[ "${5}" == tree && -n "${backdrop_dim:-}" ]]; then
+            script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+            quoted_script="$(shell_quote "${script_path}")"
+            quoted_origin="$(shell_quote "${TMUX_PANE:?missing origin pane}")"
+            preview_command="preview_target=\$(${quoted_script} --preview-target {1} ${quoted_origin}) && "
+            preview_command+="tmux capture-pane -ep -S -\$(( \${FZF_PREVIEW_LINES:-30} )) -t \"\$preview_target\" | "
+        else
+            preview_command="tmux capture-pane -ep -S -\$(( \${FZF_PREVIEW_LINES:-30} )) -t {1} | "
+        fi
         # The awk below removes trailing empty/whitespace-only lines by finding the last non-empty line and printing up to that point
         preview_command+="awk '{a[NR]=\$0} END{for(i=NR;i>0;i--) if(a[i]~/[^ \\t]/){for(j=1;j<=i;j++) print a[j]; exit}}' | "
         preview_command+="tail -n \$(( \${FZF_PREVIEW_LINES:-30} ))"
@@ -927,6 +1177,12 @@ function select_pane() {
         --tmux "${2}"
         --with-shell "${fzf_shell} -c"
     )
+    if [[ -n "${backdrop_dim:-}" ]]; then
+        fzf_args+=(--border=none)
+        backdrop_start_command="tmux set-option -pq -t \"\$__FZF_INTERNAL_TMUX_LABEL_PANE\" ${backdrop_pane_option} 1"
+        backdrop_start_command+=" \\; set-option -wF -t \"\$__FZF_INTERNAL_TMUX_LABEL_PANE\" window-style '#{window-style}'"
+        start_binding="execute-silent[${backdrop_start_command}]"
+    fi
     if [[ "${content_matching}" == 'true' ]]; then
         script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
         quoted_script="$(shell_quote "${script_path}")"
@@ -935,6 +1191,8 @@ function select_pane() {
         index_command="source ${quoted_script} --match-index ${quoted_directory} \${FZF_PREVIEW_LINES:-30}"
         enter_command="source ${quoted_script} --match-enter ${quoted_directory}"
         label_command="source ${quoted_script} --match-label ${quoted_directory}"
+        [[ -n "${start_binding}" ]] && start_binding+='+'
+        start_binding+="bg-transform[${index_command}]"
         list_label='Panes'
         [[ "${5}" == 'tree' ]] && list_label='Targets'
         border_styling[4]="--list-label= ${list_label} · Indexing content… "
@@ -948,7 +1206,7 @@ function select_pane() {
             "--accept-nth={1}${field_separator}{2}"
             --id-nth=1
             "--bind=change:reload-sync[${filter_command}]"
-            "--bind=start:bg-transform[${index_command}]"
+            "--bind=start:${start_binding}"
             "--bind=enter:transform[${enter_command}]"
             "--bind=focus,result:transform-list-label[${label_command}]"
         )
@@ -969,6 +1227,9 @@ function select_pane() {
         fi
     else
         fzf_args+=(--bind=enter:accept-or-print-query)
+        if [[ -n "${start_binding}" ]]; then
+            fzf_args+=("--bind=start:${start_binding}")
+        fi
     fi
 
     if [[ "${6}" = 'true' ]]; then
@@ -1005,7 +1266,9 @@ function select_pane() {
         fi
         pane=$(command cat "${match_directory}/metadata.1" | fzf "${fzf_args[@]}")
         cleanup_match_directory
-        trap - EXIT HUP INT TERM
+        if [[ -z "${backdrop_dim:-}" ]]; then
+            trap - EXIT HUP INT TERM
+        fi
     elif [[ "${5}" == 'two-row' ]]; then
         fzf_args+=(
             --read0
@@ -1035,7 +1298,7 @@ function select_pane() {
             configuration_error "Selected ${node_type} target no longer exists: ${pane_id}"
             return
         fi
-        tmux switch-client -t "${pane_id}"
+        switch_to_pane "${pane_id}"
         return
     fi
 
@@ -1048,7 +1311,7 @@ function select_pane() {
     # Check if pane exists
     elif tmux has-session -t "${pane_id}" >/dev/null 2>&1; then
         # Found it! Let's switch.
-        tmux switch-client -t "${pane_id}"
+        switch_to_pane "${pane_id}"
     else
         # Pane not found, let's create it.
         tmux command-prompt -b -p "Press ENTER to create a new window in the current session [${pane}]" "new-window -n \"${pane}\""
@@ -1111,6 +1374,8 @@ function normalise_launch_configuration() {
         --tree-window-colours
         --tree-pane-colours
         --preview-pane-match
+        --backdrop-dim
+        --origin-client
     )
     required_option_list=" ${required_options[*]} "
 
@@ -1139,6 +1404,8 @@ function normalise_launch_configuration() {
         tree_window_colours="${22:-}"
         tree_pane_colours="${23:-}"
         preview_pane_match="${24-false}"
+        backdrop_dim="${25:-}"
+        origin_client="${26:-}"
         return
     fi
 
@@ -1190,6 +1457,10 @@ if [[ "${1:-}" == '--records' ]]; then
 fi
 
 case "${1:-}" in
+    --preview-target)
+        resolve_preview_target "${2:?missing preview target}" "${3:?missing origin pane}"
+        exit
+        ;;
     --match-filter)
         filter_match_records "${2:?missing match directory}" "${3-}"
         exit
@@ -1220,14 +1491,29 @@ command -v fzf >/dev/null 2>&1 || { echo "fzf not found"; exit 1; }
 
 fzf_version=$(fzf --version | awk '{print $1}')
 required_fzf_version='0.71.0'
-if [[ "${preview_pane_match}" == true ]]; then
+if [[ -n "${backdrop_dim}" ]] && [[ ! "${backdrop_dim}" =~ ^([1-9]|[1-9][0-9]|100)%$ ]]; then
+    configuration_error "@fzf_pane_switch_backdrop-dim must be a percentage from 1% to 100% (got: ${backdrop_dim})"
+    exit 1
+fi
+
+if [[ -n "${backdrop_dim}" ]]; then
+    tmux_version="$(tmux -V | awk '{print $2}' | sed -E 's/[^0-9.].*$//')"
+    vercomp '3.8.0' "${tmux_version}"
+    if [[ $? -eq 1 ]]; then
+        tmux display-message "@fzf_pane_switch_backdrop-dim requires tmux 3.8 or later (found ${tmux_version})"
+        exit 1
+    fi
+    required_fzf_version='0.74.5'
+elif [[ "${preview_pane_match}" == true ]]; then
     # fzf 0.73 fixed background transforms dropping reload payloads. Pane
     # matching relies on that path to apply a completed asynchronous index.
     required_fzf_version='0.73.0'
 fi
 vercomp "${required_fzf_version}" "${fzf_version}"
 if [[ $? -eq 1 ]]; then
-    if [[ "${preview_pane_match}" == true ]]; then
+    if [[ -n "${backdrop_dim}" ]]; then
+        tmux display-message "@fzf_pane_switch_backdrop-dim requires fzf 0.74.5 or later (found ${fzf_version})"
+    elif [[ "${preview_pane_match}" == true ]]; then
         tmux display-message "@fzf_pane_switch_preview-pane-match requires fzf 0.73.0 or later (found ${fzf_version})"
     else
         tmux display-message "fzf 0.71.0 or later is required (found ${fzf_version})"
