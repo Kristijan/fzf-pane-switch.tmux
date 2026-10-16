@@ -2,7 +2,36 @@
 
 printf '%s\n' "$*" >> "${TMUX_STUB_LOG}"
 
+# Preserve tmux's command-list ordering for batched setup and cleanup calls.
+arguments=()
+for argument in "$@"; do
+    if [[ "${argument}" == ';' ]]; then
+        "$0" "${arguments[@]}" || exit
+        arguments=()
+    else
+        arguments+=("${argument}")
+    fi
+done
+if [[ ${#arguments[@]} -ne $# ]]; then
+    "$0" "${arguments[@]}"
+    exit
+fi
+
+if [[ "${1:-}" == '-V' ]]; then
+    printf 'tmux %s\n' "${TMUX_STUB_VERSION:-3.8}"
+    exit 0
+fi
+
 case "${1:-}" in
+    if-shell)
+        claim="${*: -1}"
+        if [[ "${claim}" == *'@fzf_pane_switch_backdrop-owner '* ]]; then
+            owner="${claim##*backdrop-owner }"
+            printf '%s\n' "${TMUX_STUB_CLAIM_OWNER:-${owner:1:${#owner}-2}}" > "${TMUX_STUB_LOG}.owner"
+        elif [[ "$*" == *"'display-message' '-p' 'installed'"* ]]; then
+            printf 'installed\n'
+        fi
+        ;;
     show-option)
         option="${*: -1}"
         case "${option}" in
@@ -21,12 +50,31 @@ case "${1:-}" in
             @fzf_pane_switch_refresh) printf '%s\n' "${TMUX_STUB_REFRESH:-}" ;;
             @fzf_pane_switch_preview-pane-start) printf '%s\n' "${TMUX_STUB_PREVIEW_PANE_START:-}" ;;
             @fzf_pane_switch_preview-pane-match) printf '%s\n' "${TMUX_STUB_PREVIEW_PANE_MATCH:-}" ;;
+            @fzf_pane_switch_backdrop-dim) printf '%s\n' "${TMUX_STUB_BACKDROP_DIM:-}" ;;
+            @fzf_pane_switch_backdrop-owner)
+                if [[ -f "${TMUX_STUB_LOG}.owner" ]]; then
+                    command cat "${TMUX_STUB_LOG}.owner"
+                else
+                    printf '%s\n' "${TMUX_STUB_BACKDROP_OWNER:-}"
+                fi
+                ;;
+            @fzf_pane_switch_backdrop-was-local) printf '%s\n' "${TMUX_STUB_BACKDROP_WAS_LOCAL:-}" ;;
+            @fzf_pane_switch_backdrop-previous-style) printf '%s\n' "${TMUX_STUB_BACKDROP_PREVIOUS_STYLE:-}" ;;
+            @fzf_pane_switch_backdrop-installed-style) printf '%s\n' "${TMUX_STUB_BACKDROP_INSTALLED_STYLE:-}" ;;
+            @fzf_pane_switch_backdrop-hook) printf '%s\n' "${TMUX_STUB_BACKDROP_HOOK:-}" ;;
             @fzf_pane_switch_tree-session-format) printf '%s\n' "${TMUX_STUB_TREE_SESSION:-}" ;;
             @fzf_pane_switch_tree-window-format) printf '%s\n' "${TMUX_STUB_TREE_WINDOW:-}" ;;
             @fzf_pane_switch_tree-pane-format) printf '%s\n' "${TMUX_STUB_TREE_PANE:-}" ;;
             @fzf_pane_switch_tree-session-colours) printf '%s\n' "${TMUX_STUB_TREE_SESSION_COLOURS:-}" ;;
             @fzf_pane_switch_tree-window-colours) printf '%s\n' "${TMUX_STUB_TREE_WINDOW_COLOURS:-}" ;;
             @fzf_pane_switch_tree-pane-colours) printf '%s\n' "${TMUX_STUB_TREE_PANE_COLOURS:-}" ;;
+            window-style)
+                if [[ " $* " == *' -A'* ]]; then
+                    printf '%s\n' "${TMUX_STUB_WINDOW_STYLE_EFFECTIVE:-default}"
+                else
+                    printf '%s\n' "${TMUX_STUB_WINDOW_STYLE_LOCAL:-}"
+                fi
+                ;;
         esac
         ;;
     show-options)
@@ -47,6 +95,7 @@ case "${1:-}" in
             [[ -n "${TMUX_STUB_TREE_SESSION_COLOURS+x}" ]] && printf '@fzf_pane_switch_tree-session-colours %s\n' "${TMUX_STUB_TREE_SESSION_COLOURS}"
             [[ -n "${TMUX_STUB_TREE_WINDOW_COLOURS+x}" ]] && printf '@fzf_pane_switch_tree-window-colours %s\n' "${TMUX_STUB_TREE_WINDOW_COLOURS}"
             [[ -n "${TMUX_STUB_TREE_PANE_COLOURS+x}" ]] && printf '@fzf_pane_switch_tree-pane-colours %s\n' "${TMUX_STUB_TREE_PANE_COLOURS}"
+            [[ -n "${TMUX_STUB_BACKDROP_DIM+x}" ]] && printf '@fzf_pane_switch_backdrop-dim %s\n' "${TMUX_STUB_BACKDROP_DIM}"
         fi
         ;;
     list-sessions)
@@ -89,6 +138,10 @@ case "${1:-}" in
         ;;
     display-message)
         if [[ "${2:-}" == '-p' || "${*:1}" == *' -p '* ]]; then
+            case "${*: -1}" in
+                '#{window_id}') printf '%s\n' "${TMUX_STUB_WINDOW_ID:-@1}" ;;
+                '#{session_id}') printf '%s\n' "${TMUX_STUB_SESSION_ID:-\$1}" ;;
+            esac
             [[ "${TMUX_STUB_TARGET_EXISTS:-true}" == true ]]
         fi
         ;;

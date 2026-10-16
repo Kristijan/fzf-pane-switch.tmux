@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Interrupt the launcher immediately after its setup transaction has mutated
+# real tmux state, before setup_backdrop returns and fzf can start.
+if [[ "${1:-}" == if-shell && "$*" == *"'display-message' '-p' 'installed'"* ]]; then
+    if [[ "${BACKDROP_SETUP_ACTION:-signal}" == style-change ]]; then
+        "${REAL_TMUX}" set-option -w -t integration:0 window-style 'fg=green'
+        printf 'changed\n' > "${BACKDROP_SIGNAL_MARKER}"
+        exec "${REAL_TMUX}" "$@"
+    fi
+    "${REAL_TMUX}" "$@"
+    result=$?
+    owner="$("${REAL_TMUX}" show-option -wqv -t integration:0 @fzf_pane_switch_backdrop-owner)"
+    if [[ -n "${owner}" ]]; then
+        printf 'interrupted\n' > "${BACKDROP_SIGNAL_MARKER}"
+        kill -TERM "${owner%%:*}"
+    fi
+    exit "${result}"
+fi
+exec "${REAL_TMUX}" "$@"

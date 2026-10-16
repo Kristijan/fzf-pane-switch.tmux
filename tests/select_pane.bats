@@ -10,6 +10,38 @@ setup() {
     setup_test_environment
 }
 
+run_named_switcher() {
+    local backdrop_dim="${1:-}" origin_client="${2:-test-client}"
+    run_select_pane \
+        --launch \
+        --preview-pane true \
+        --window-position 'center,70%,80%' \
+        --preview-pane-position 'right,,,nowrap' \
+        --list-panes-format 'pane_id session_name window_name pane_title pane_current_command' \
+        --layout one-row \
+        --two-row-style plain \
+        --row-1-format 'pane_title pane_current_command' \
+        --row-2-format 'session_name window_name' \
+        --separator '│' \
+        --list-panes-colours '' \
+        --colour-separator '' \
+        --row-1-colours '' \
+        --row-2-colours '' \
+        --footer false \
+        --jump-labels false \
+        --refresh false \
+        --preview-pane-start visible \
+        --tree-session-format session_name \
+        --tree-window-format 'window_index window_name' \
+        --tree-pane-format 'pane_index pane_title pane_current_command' \
+        --tree-session-colours '' \
+        --tree-window-colours '' \
+        --tree-pane-colours '' \
+        --preview-pane-match false \
+        --backdrop-dim "${backdrop_dim}" \
+        --origin-client "${origin_client}"
+}
+
 @test "launches the switcher from named configuration in any order" {
     printf '%%1 %%1 work editor Title nvim \n' > "${CASE_DIR}/expected-input"
     export TMUX_STUB_EXPAND_FORMAT='false'
@@ -41,7 +73,9 @@ setup() {
         --tree-pane-format 'pane_index pane_title pane_current_command' \
         --tree-session-colours '' \
         --tree-window-colours '' \
-        --tree-pane-colours ''
+        --tree-pane-colours '' \
+        --backdrop-dim '' \
+        --origin-client test-client
 
     assert_status 0
     assert_files_equal_bytes "${CASE_DIR}/expected-input" "${FZF_STUB_INPUT}"
@@ -49,6 +83,111 @@ setup() {
     assert_file_has_line "${FZF_STUB_ARGS}" 'center,70%,80%'
     assert_file_has_line "${FZF_STUB_ARGS}" '--preview-window=right,,,nowrap'
 }
+
+@test "rejects a backdrop dim value without a percentage" {
+    export FZF_STUB_VERSION='0.74.5'
+
+    run_named_switcher '60'
+
+    assert_status 1
+    refute_path_exists "${FZF_STUB_INPUT}"
+    assert_file_contains "${TMUX_STUB_LOG}" \
+        '@fzf_pane_switch_backdrop-dim must be a percentage from 1% to 100%'
+}
+
+@test "backdrop dimming requires fzf 0.74.5" {
+    export FZF_STUB_VERSION='0.74.4'
+
+    run_named_switcher '60%'
+
+    assert_status 1
+    refute_path_exists "${FZF_STUB_INPUT}"
+    assert_file_contains "${TMUX_STUB_LOG}" \
+        '@fzf_pane_switch_backdrop-dim requires fzf 0.74.5 or later'
+}
+
+@test "backdrop dimming requires tmux 3.8" {
+    export FZF_STUB_VERSION='0.74.5'
+    export TMUX_STUB_VERSION='3.7'
+
+    run_named_switcher '60%'
+
+    assert_status 1
+    refute_path_exists "${FZF_STUB_INPUT}"
+    assert_file_contains "${TMUX_STUB_LOG}" \
+        '@fzf_pane_switch_backdrop-dim requires tmux 3.8 or later'
+}
+
+@test "backdrop mode uses a native floating border and switches the originating client" {
+    export FZF_STUB_VERSION='0.74.5'
+    export FZF_STUB_OUTPUT='%1'
+
+    run_named_switcher '60%' 'client-7'
+
+    assert_status 0
+    assert_file_has_line "${FZF_STUB_ARGS}" '--border=none'
+    assert_file_contains "${TMUX_STUB_LOG}" \
+        '^switch-client -c client-7 -t %1$'
+}
+
+@test "backdrop mode rejects a second switcher in the same window" {
+    export FZF_STUB_VERSION='0.74.5'
+    export TMUX_STUB_BACKDROP_OWNER="$$"
+
+    run_named_switcher '60%'
+
+    assert_status 1
+    refute_path_exists "${FZF_STUB_INPUT}"
+    assert_file_contains "${TMUX_STUB_LOG}" \
+        'Pane switcher is already open in this window'
+}
+
+@test "backdrop mode does not launch or clean another owner after losing its atomic claim" {
+    export FZF_STUB_VERSION='0.74.5'
+    export TMUX_STUB_CLAIM_OWNER='999:other-process'
+
+    run_named_switcher '60%'
+
+    assert_status 1
+    refute_path_exists "${FZF_STUB_INPUT}"
+    refute_file_contains "${TMUX_STUB_LOG}" 'set-option -wu'
+    assert_file_contains "${TMUX_STUB_LOG}" 'Pane switcher is already open in this window'
+}
+
+@test "backdrop mode fails without mutating state when process identity is unavailable" {
+    export FZF_STUB_VERSION='0.74.5'
+    ps() { return 1; }
+    export -f ps
+
+    run_named_switcher '60%'
+
+    assert_status 1
+    refute_path_exists "${FZF_STUB_INPUT}"
+    refute_file_contains "${TMUX_STUB_LOG}" 'if-shell'
+    assert_file_contains "${TMUX_STUB_LOG}" 'Unable to identify pane switcher process'
+}
+
+preview_target_case() {
+    local target="$1" expected="$2"
+    export TMUX_STUB_WINDOW_ID='@2'
+    export TMUX_STUB_SESSION_ID='$4'
+    export TMUX_STUB_EXPAND_FORMAT='false'
+    export TMUX_STUB_LIST_OUTPUT=$'%7 1 1 0\n%8 0 0 1\n%9 0 1 0\n'
+
+    run_select_pane --preview-target "${target}" '%1'
+
+    assert_status 0
+    assert_value_equal "${expected}" "${output}"
+}
+
+bats_test_function --description 'tree preview keeps an exact pane target' -- \
+    preview_target_case '%6' '%6'
+bats_test_function --description 'tree preview pins the originating window to its launch pane' -- \
+    preview_target_case '@2' '%1'
+bats_test_function --description 'tree preview pins the originating session to its launch pane' -- \
+    preview_target_case '$4' '%1'
+bats_test_function --description 'tree preview excludes an active floating pane in another scope' -- \
+    preview_target_case '@3' '%9'
 
 @test "rejects an unknown named launch option" {
     run_select_pane --launch --unknown-option value

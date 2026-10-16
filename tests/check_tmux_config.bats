@@ -11,13 +11,32 @@ setup() {
 }
 
 @test "configuration checker accepts names, predefined values, and positional colours" {
-    export TMUX_STUB_SHOW_OPTIONS=$'status-keys vi\n@fzf_pane_switch_layout tree\n@fzf_pane_switch_preview-pane true\n@fzf_pane_switch_preview-pane-match true\n@fzf_pane_switch_row-2-colours blue none\n@fzf_pane_switch_tree-pane-format pane_index pane_title\n@fzf_pane_switch_tree-pane-colours cyan magenta\n'
+    export TMUX_STUB_SHOW_OPTIONS=$'status-keys vi\n@fzf_pane_switch_layout tree\n@fzf_pane_switch_preview-pane true\n@fzf_pane_switch_preview-pane-match true\n@fzf_pane_switch_backdrop-dim 60%\n@fzf_pane_switch_row-2-colours blue none\n@fzf_pane_switch_tree-pane-format pane_index pane_title\n@fzf_pane_switch_tree-pane-colours cyan magenta\n'
 
     run_configuration_checker
 
     assert_status 0
-    assert_output_line_count '^PASS @fzf_pane_switch' 6
-    assert_output_contains 'All 6 fzf-pane-switch options passed.'
+    assert_output_line_count '^PASS @fzf_pane_switch' 7
+    assert_output_contains 'All 7 fzf-pane-switch options passed.'
+}
+
+@test "configuration checker rejects an invalid backdrop percentage" {
+    export TMUX_STUB_SHOW_OPTIONS=$'@fzf_pane_switch_backdrop-dim 0%\n'
+
+    run_configuration_checker
+
+    assert_status 1
+    assert_output_contains "@fzf_pane_switch_backdrop-dim: invalid value '0%'"
+    assert_output_contains 'percentage from 1% to 100%'
+}
+
+@test "configuration checker accepts an explicitly empty backdrop value" {
+    export TMUX_STUB_SHOW_OPTIONS=$'@fzf_pane_switch_backdrop-dim \'\'\n'
+
+    run_configuration_checker
+
+    assert_status 0
+    assert_output_contains "PASS @fzf_pane_switch_backdrop-dim = ''"
 }
 
 @test "configuration checker reports every invalid option with a fix" {

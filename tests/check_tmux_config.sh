@@ -107,6 +107,13 @@ for ((index = 0; index < ${#option_names[@]}; index++)); do
         @fzf_pane_switch_preview-pane | @fzf_pane_switch_preview-pane-match | @fzf_pane_switch_footer | @fzf_pane_switch_jump-labels | @fzf_pane_switch_refresh)
             validate_allowed_value "${option_name}" "${option_value}" 'true false' || option_valid=false
             ;;
+        @fzf_pane_switch_backdrop-dim)
+            if [[ -n "${option_value}" && "${option_value}" != "''" && "${option_value}" != '""' &&
+                ! "${option_value}" =~ ^([1-9]|[1-9][0-9]|100)%$ ]]; then
+                append_error "${option_name}: invalid value '${option_value}'. Fix: set it to a percentage from 1% to 100%."
+                option_valid=false
+            fi
+            ;;
         @fzf_pane_switch_list-panes-colours)
             validate_positional_count "${option_name}" "${option_value}" '@fzf_pane_switch_list-panes-format' "${list_panes_format}" || option_valid=false
             ;;

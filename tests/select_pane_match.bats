@@ -9,18 +9,20 @@ setup() {
 
 run_content_matching_switcher() {
     local preview="${1:-false}" refresh="${2:-false}" footer="${3:-false}" output="${4:-}"
+    local layout="${5:-one-row}" backdrop_dim="${6:-}"
     local field_separator=$'\037'
     export FZF_STUB_OUTPUT="${output:-%1${field_separator}pane}"
 
     run_select_pane \
         "${preview}" 'center,70%,80%' 'right,,,nowrap' \
         'pane_id session_name window_name pane_title pane_current_command' \
-        one-row plain \
+        "${layout}" plain \
         'pane_title pane_current_command' \
         'session_name window_name' '│' '' '' '' '' \
         "${footer}" false "${refresh}" visible \
         session_name 'window_index window_name' \
-        'pane_index pane_title pane_current_command' '' '' '' true
+        'pane_index pane_title pane_current_command' '' '' '' true \
+        "${backdrop_dim}" test-client
 }
 
 @test "content matching requires the fzf 0.73 background-reload fix" {
@@ -67,6 +69,38 @@ run_content_matching_switcher() {
         '^--bind=focus,result:transform-list-label\[.*--match-label.*\]$'
     refute_file_contains "${FZF_STUB_ARGS}" '^--preview$|^--preview-window='
     assert_file_contains "${TMUX_STUB_LOG}" 'switch-client -t %1'
+}
+
+@test "backdrop and content matching share one fzf start binding" {
+    local field_separator=$'\037'
+    export FZF_STUB_VERSION='0.74.5'
+    export FZF_STUB_OUTPUT="%1${field_separator}pane"
+
+    run_select_pane \
+        false 'center,70%,80%' 'right,,,nowrap' \
+        'pane_id session_name window_name pane_title pane_current_command' \
+        one-row plain 'pane_title pane_current_command' \
+        'session_name window_name' '│' '' '' '' '' \
+        false false false visible \
+        session_name 'window_index window_name' \
+        'pane_index pane_title pane_current_command' '' '' '' true \
+        '60%' test-client
+
+    assert_status 0
+    [[ "$(grep -c '^--bind=start:' "${FZF_STUB_ARGS}")" -eq 1 ]]
+    assert_file_contains "${FZF_STUB_ARGS}" \
+        '^--bind=start:execute-silent\[.*@fzf_pane_switch_backdrop.*\]\+bg-transform\[.*--match-index.*\]$'
+}
+
+@test "floating tree preview resolves broad targets from the originating pane" {
+    export FZF_STUB_VERSION='0.74.5'
+    export TMUX_PANE='%1'
+
+    run_content_matching_switcher true false false '' tree '60%'
+
+    assert_status 0
+    assert_file_contains "${FZF_STUB_ARGS}" \
+        "--preview-target.*\\{1\\}.*%1"
 }
 
 @test "pane preview and content matching share the dynamic capture depth" {

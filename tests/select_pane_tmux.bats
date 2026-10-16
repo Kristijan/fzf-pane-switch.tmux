@@ -58,6 +58,18 @@ setup() {
     assert_file_contains "${TMUX_STUB_LOG}" '^bind-key s run-shell '
 }
 
+@test "tmux entrypoint uses a pane-aware background binding for backdrop dimming" {
+    export TMUX_STUB_BACKDROP_DIM='60%'
+
+    run_tmux_entrypoint
+
+    assert_status 0
+    assert_file_contains "${TMUX_STUB_LOG}" \
+        "^bind-key s run-shell -b TMUX_PANE='#{pane_id}' "
+    assert_file_contains "${TMUX_STUB_LOG}" \
+        "'--backdrop-dim' '60%'.*'--origin-client' '#{client_name}'"
+}
+
 @test "tmux entrypoint supports root binding mode" {
     export TMUX_STUB_BIND_KEY_MODE='root'
 

@@ -11,6 +11,7 @@ default_preview_pane_match='false'
 default_footer='false'
 default_jump_labels='false'
 default_refresh='false'
+default_backdrop_dim=''
 default_fzf_window_position='center,70%,80%'
 default_fzf_preview_window_position='right,,,nowrap'
 default_tmux_list_panes_format='pane_id session_name window_name pane_title pane_current_command'
@@ -33,6 +34,7 @@ tmux_preview_pane_match="@fzf_pane_switch_preview-pane-match"
 tmux_footer="@fzf_pane_switch_footer"
 tmux_jump_labels="@fzf_pane_switch_jump-labels"
 tmux_refresh="@fzf_pane_switch_refresh"
+tmux_backdrop_dim="@fzf_pane_switch_backdrop-dim"
 tmux_fzf_window_position="@fzf_pane_switch_window-position"
 tmux_fzf_preview_window_position="@fzf_pane_switch_preview-pane-position"
 tmux_list_panes_format="@fzf_pane_switch_list-panes-format"
@@ -96,7 +98,7 @@ shell_quote() {
 # Resolves the plugin configuration and registers the tmux key binding that
 # launches the pane switcher.
 set_switch_pane_bindings() {
-    local bind_key bind_key_mode preview_pane preview_pane_start preview_pane_match footer jump_labels refresh fzf_window_position fzf_preview_window_position list_panes_format
+    local bind_key bind_key_mode preview_pane preview_pane_start preview_pane_match footer jump_labels refresh backdrop_dim fzf_window_position fzf_preview_window_position list_panes_format
     local layout two_row_style row_1_format row_2_format separator separator_colour
     local list_panes_colours row_1_colours row_2_colours
     local tree_session_format tree_window_format tree_pane_format
@@ -111,6 +113,7 @@ set_switch_pane_bindings() {
     footer="$(get_tmux_option "${tmux_footer}" "${default_footer}")"
     jump_labels="$(get_tmux_option "${tmux_jump_labels}" "${default_jump_labels}")"
     refresh="$(get_tmux_option "${tmux_refresh}" "${default_refresh}")"
+    backdrop_dim="$(get_tmux_option_allow_empty "${tmux_backdrop_dim}" "${default_backdrop_dim}")"
     fzf_window_position="$(get_tmux_option "${tmux_fzf_window_position}" "${default_fzf_window_position}")"
     fzf_preview_window_position="$(get_tmux_option "${tmux_fzf_preview_window_position}" "${default_fzf_preview_window_position}")"
     list_panes_format="$(get_tmux_option "${tmux_list_panes_format}" "${default_tmux_list_panes_format}")"
@@ -156,19 +159,32 @@ set_switch_pane_bindings() {
         --tree-window-colours "${tree_window_colours}"
         --tree-pane-colours "${tree_pane_colours}"
         --preview-pane-match "${preview_pane_match}"
+        --backdrop-dim "${backdrop_dim}"
+        --origin-client '#{client_name}'
     )
 
     command="$(shell_quote "${CURRENT_DIR}/select_pane.sh")"
     for argument in "${launch_arguments[@]}"; do
         command+=" $(shell_quote "${argument}")"
     done
+    if [[ -n "${backdrop_dim}" ]]; then
+        command="TMUX_PANE=$(shell_quote '#{pane_id}') ${command}"
+    fi
 
     case "${bind_key_mode}" in
         prefix)
-            tmux bind-key "${bind_key}" run-shell "${command}"
+            if [[ -n "${backdrop_dim}" ]]; then
+                tmux bind-key "${bind_key}" run-shell -b "${command}"
+            else
+                tmux bind-key "${bind_key}" run-shell "${command}"
+            fi
             ;;
         root)
-            tmux bind-key -T root "${bind_key}" run-shell "${command}"
+            if [[ -n "${backdrop_dim}" ]]; then
+                tmux bind-key -T root "${bind_key}" run-shell -b "${command}"
+            else
+                tmux bind-key -T root "${bind_key}" run-shell "${command}"
+            fi
             ;;
         *)
             tmux display-message "@fzf_pane_switch_bind-key-mode must be prefix or root (got: ${bind_key_mode})"
