@@ -71,8 +71,12 @@ case "${1:-}" in
             window-style)
                 if [[ " $* " == *' -A'* ]]; then
                     printf '%s\n' "${TMUX_STUB_WINDOW_STYLE_EFFECTIVE:-default}"
-                else
-                    printf '%s\n' "${TMUX_STUB_WINDOW_STYLE_LOCAL:-}"
+                elif [[ -n "${TMUX_STUB_WINDOW_STYLE_LOCAL+x}" ]]; then
+                    if [[ " $* " == *' -wq '* ]]; then
+                        printf 'window-style %s\n' "${TMUX_STUB_WINDOW_STYLE_LOCAL}"
+                    else
+                        printf '%s\n' "${TMUX_STUB_WINDOW_STYLE_LOCAL}"
+                    fi
                 fi
                 ;;
         esac
@@ -147,6 +151,12 @@ case "${1:-}" in
         if [[ "${2:-}" == '-p' || "${*:1}" == *' -p '* ]]; then
             case "${*: -1}" in
                 '#{window_id}') printf '%s\n' "${TMUX_STUB_WINDOW_ID:-@1}" ;;
+                $'#{window_id}\n#{@fzf_pane_switch_backdrop-owner}')
+                    printf '%s\n%s\n' "${TMUX_STUB_WINDOW_ID:-@1}" "${TMUX_STUB_BACKDROP_OWNER:-}"
+                    ;;
+                '#{window-style}')
+                    printf '%s\n' "${TMUX_STUB_WINDOW_STYLE_LOCAL:-${TMUX_STUB_WINDOW_STYLE_EFFECTIVE:-default}}"
+                    ;;
                 '#{session_id}') printf '%s\n' "${TMUX_STUB_SESSION_ID:-\$1}" ;;
             esac
             [[ "${TMUX_STUB_TARGET_EXISTS:-true}" == true ]]

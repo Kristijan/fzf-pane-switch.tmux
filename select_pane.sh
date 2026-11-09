@@ -857,8 +857,7 @@ function restore_backdrop_state() {
 # Reclaims a backdrop record whose switcher process no longer exists. A live
 # owner keeps the one-switcher-per-window invariant.
 function recover_stale_backdrop() {
-    local window="$1" owner was_local previous_style installed_style hook claimed_owner claim owner_format
-    owner="$(tmux show-option -wqv -t "${window}" "${backdrop_owner_option}")"
+    local window="$1" owner="$2" was_local previous_style installed_style hook claimed_owner claim owner_format
     local owner_pid="${owner%%:*}" owner_start
     owner_start=''
     [[ "${owner_pid}" =~ ^[1-9][0-9]*$ ]] && owner_start="$(ps -p "${owner_pid}" -o lstart= 2>/dev/null)"
@@ -906,9 +905,14 @@ function recover_stale_backdrop() {
 # Applies a conditional window style while the marked floating switcher is the
 # active pane. The original local/inherited state is retained for cleanup.
 function setup_backdrop() {
-    local local_style_line condition hook_command installation argument installed process_start
+    local snapshot initial_owner local_style_line condition hook_command installation argument installed process_start
     local -a installation_commands
-    backdrop_window="$(tmux display-message -p -t "${TMUX_PANE:?missing origin pane}" '#{window_id}')" || return 1
+    snapshot="$(tmux display-message -p -t "${TMUX_PANE:?missing origin pane}" \
+        $'#{window_id}\n#{@fzf_pane_switch_backdrop-owner}')" || return 1
+    {
+        IFS= read -r backdrop_window
+        IFS= read -r initial_owner
+    } <<< "${snapshot}"
     [[ -n "${backdrop_window}" ]] || return 1
 
     process_start="$(ps -p "$$" -o lstart= 2>/dev/null)"
@@ -917,15 +921,18 @@ function setup_backdrop() {
         return 1
     fi
     backdrop_owner="$$:${process_start}"
-    recover_stale_backdrop "${backdrop_window}" || return 1
+    recover_stale_backdrop "${backdrop_window}" "${initial_owner}" || return 1
 
-    local_style_line="$(tmux show-option -wq -t "${backdrop_window}" window-style)"
-    if [[ -n "${local_style_line}" ]]; then
+    # Read local presence and the raw effective value in one client round trip.
+    snapshot="$(tmux show-option -wq -t "${backdrop_window}" window-style \; \
+        display-message -p -t "${backdrop_window}" '#{window-style}')" || return 1
+    local_style_line="${snapshot%%$'\n'*}"
+    if [[ "${local_style_line}" == window-style\ * ]]; then
         backdrop_previous_style_was_local=true
-        backdrop_previous_style="$(tmux show-option -wqv -t "${backdrop_window}" window-style)"
+        backdrop_previous_style="${snapshot#*$'\n'}"
     else
         backdrop_previous_style_was_local=false
-        backdrop_previous_style="$(tmux show-option -Awqv -t "${backdrop_window}" window-style)"
+        backdrop_previous_style="${snapshot}"
     fi
 
     condition="#{?#{&&:#{!:#{pane_active}},#{m:*1*,#{P:#{&&:#{pane_active},#{${backdrop_pane_option}}}}}},dim=${backdrop_dim},}"

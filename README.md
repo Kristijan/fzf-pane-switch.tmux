@@ -151,6 +151,8 @@ RUN_FZF_PANE_SWITCH_INTEGRATION=true bats tests/integration
 
 Set `FZF_INTEGRATION_BINARY`, `TMUX_INTEGRATION_BINARY`, or `PYTHON_INTEGRATION_BINARY` to exercise a specific compatible binary.
 
+Backdrop startup batches the origin/owner and local/effective style snapshots. Ownership and style installation remain server-side compare-and-set operations.
+
 Maintainers can find the feature's terminology and implementation boundaries in
 [`CONTEXT.md`](CONTEXT.md).
 
