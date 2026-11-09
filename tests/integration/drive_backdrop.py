@@ -116,6 +116,25 @@ def main():
         )
         if not floating:
             raise RuntimeError("switcher did not create and mark a floating pane")
+        if scenario == "orphan-recovery":
+            stale_pane = floating
+            owner = run_tmux(
+                tmux_binary, socket_name, "show-option", "-wqv", "-t",
+                "integration:0", "@fzf_pane_switch_backdrop-owner",
+            ).strip()
+            os.kill(int(owner.split(":", 1)[0]), signal.SIGKILL)
+            # Reopen from the still-focused orphan to exercise origin recovery.
+            time.sleep(0.1)
+            os.write(fd, b"\x02s")
+            floating = wait_for(
+                lambda: next((row[0] for row in pane_rows(tmux_binary, socket_name)
+                              if row[1:] == ["1", "1"] and row[0] != stale_pane), None),
+                fd, transcript,
+            )
+            rows = pane_rows(tmux_binary, socket_name)
+            if not floating or any(row[0] == stale_pane for row in rows):
+                raise RuntimeError(f"stale switcher was not reclaimed: {rows!r}")
+
 
         origin_client = ""
         if scenario == "multi-client":

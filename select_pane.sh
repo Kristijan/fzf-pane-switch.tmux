@@ -809,11 +809,27 @@ function clear_backdrop_metadata() {
     tmux "${commands[@]}" 2>/dev/null
 }
 
+# Only reclaim floating panes carrying this invocation's full process identity.
+function reclaim_backdrop_panes() {
+    local window="$1" owner="$2" pane floating pane_owner origin
+    while IFS=$'\t' read -r pane floating pane_owner origin; do
+        [[ "${floating}" == 1 && "${pane_owner}" == "${owner}" ]] || continue
+        if [[ "${TMUX_PANE:-}" == "${pane}" && "${origin}" =~ ^%[0-9]+$ ]]; then
+            export TMUX_PANE="${origin}"
+        fi
+        tmux if-shell -F -t "${pane}" \
+            "#{==:#{@fzf_pane_switch_backdrop-pane-owner},$(format_literal "${owner}")}" \
+            "kill-pane -t ${pane}" 2>/dev/null
+    done < <(tmux list-panes -t "${window}" \
+        -F $'#{pane_id}\t#{pane_floating_flag}\t#{@fzf_pane_switch_backdrop-pane-owner}\t#{@fzf_pane_switch_backdrop-origin}' 2>/dev/null)
+}
+
 # Restores a recorded backdrop only if its conditional style is still intact.
 # A user or plugin change made after installation therefore wins.
 function restore_backdrop_state() {
     local window="$1" owner="$2" was_local="$3" previous_style="$4" installed_style="$5" hook="$6"
     local expected_hook expected_command restore_command
+    reclaim_backdrop_panes "${window}" "${owner}"
     if [[ -n "${installed_style}" ]]; then
         if [[ "${was_local}" == true ]]; then
             restore_command="set-option -w -t ${window} window-style $(shell_quote "${previous_style}")"
@@ -1190,6 +1206,8 @@ function select_pane() {
     if [[ -n "${backdrop_dim:-}" ]]; then
         fzf_args+=(--border=none)
         backdrop_start_command="tmux set-option -pq -t \"\$__FZF_INTERNAL_TMUX_LABEL_PANE\" ${backdrop_pane_option} 1"
+        backdrop_start_command+=" \\; set-option -pq -t \"\$__FZF_INTERNAL_TMUX_LABEL_PANE\" @fzf_pane_switch_backdrop-pane-owner $(shell_quote "${backdrop_owner}")"
+        backdrop_start_command+=" \\; set-option -pq -t \"\$__FZF_INTERNAL_TMUX_LABEL_PANE\" @fzf_pane_switch_backdrop-origin $(shell_quote "${TMUX_PANE}")"
         backdrop_start_command+=" \\; set-option -wF -t \"\$__FZF_INTERNAL_TMUX_LABEL_PANE\" window-style '#{window-style}'"
         start_binding="execute-silent[${backdrop_start_command}]"
     fi

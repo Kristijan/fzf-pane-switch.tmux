@@ -86,6 +86,19 @@ require_backdrop_versions() {
     assert_status 0
 }
 
+@test "real tmux stale recovery reclaims only the orphaned switcher" {
+    require_backdrop_versions
+    tmux split-window -d -t integration:0
+    tmux set-option -g window-style 'fg=cyan'
+    tmux set-option -g @fzf_pane_switch_preview-pane false
+    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
+    tmux run-shell "${REPO_DIR}/select_pane.tmux"
+    export BACKDROP_SCENARIO=orphan-recovery
+    run "${REAL_PYTHON}" "${REPO_DIR}/tests/integration/drive_backdrop.py" \
+        "${REAL_TMUX}" "${TMUX_TEST_SOCKET}"
+    assert_status 0
+}
+
 @test "real tmux backdrop preserves a replaced hook" {
     require_backdrop_versions
     tmux split-window -d -t integration:0
