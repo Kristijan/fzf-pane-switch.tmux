@@ -104,7 +104,7 @@ set_switch_pane_bindings() {
     local tree_session_format tree_window_format tree_pane_format
     local tree_session_colours tree_window_colours tree_pane_colours
     local command argument
-    local -a launch_arguments
+    local -a launch_arguments run_shell_arguments
     bind_key="$(get_tmux_option "${tmux_bind_key}" "${default_bind_key}")"
     bind_key_mode="$(get_tmux_option "${tmux_bind_key_mode}" "${default_bind_key_mode}")"
     preview_pane="$(get_tmux_option "${tmux_preview_pane}" "${default_preview_pane}")"
@@ -167,24 +167,19 @@ set_switch_pane_bindings() {
     for argument in "${launch_arguments[@]}"; do
         command+=" $(shell_quote "${argument}")"
     done
+    run_shell_arguments=(run-shell)
     if [[ -n "${backdrop_dim}" ]]; then
         command="TMUX_PANE=$(shell_quote '#{pane_id}') ${command}"
+        run_shell_arguments+=(-b)
     fi
+    run_shell_arguments+=("${command}")
 
     case "${bind_key_mode}" in
         prefix)
-            if [[ -n "${backdrop_dim}" ]]; then
-                tmux bind-key "${bind_key}" run-shell -b "${command}"
-            else
-                tmux bind-key "${bind_key}" run-shell "${command}"
-            fi
+            tmux bind-key "${bind_key}" "${run_shell_arguments[@]}"
             ;;
         root)
-            if [[ -n "${backdrop_dim}" ]]; then
-                tmux bind-key -T root "${bind_key}" run-shell -b "${command}"
-            else
-                tmux bind-key -T root "${bind_key}" run-shell "${command}"
-            fi
+            tmux bind-key -T root "${bind_key}" "${run_shell_arguments[@]}"
             ;;
         *)
             tmux display-message "@fzf_pane_switch_bind-key-mode must be prefix or root (got: ${bind_key_mode})"
