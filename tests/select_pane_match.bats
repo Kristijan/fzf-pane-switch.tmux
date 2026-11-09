@@ -92,16 +92,6 @@ run_content_matching_switcher() {
         '^--bind=start:execute-silent\[.*@fzf_pane_switch_backdrop.*\]\+bg-transform\[.*--match-index.*\]$'
 }
 
-@test "floating tree preview resolves broad targets from the originating pane" {
-    export FZF_STUB_VERSION='0.74.5'
-    export TMUX_PANE='%1'
-
-    run_content_matching_switcher true false false '' tree '60%'
-
-    assert_status 0
-    assert_file_contains "${FZF_STUB_ARGS}" \
-        "--preview-target.*\\{1\\}.*%1"
-}
 
 @test "pane preview and content matching share the dynamic capture depth" {
     run_content_matching_switcher true false

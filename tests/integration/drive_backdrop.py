@@ -226,6 +226,17 @@ def main():
 
             if not wait_for(indexed_origin_content, fd, transcript):
                 raise RuntimeError("tree session/window/pane content did not match the origin preview")
+            run_tmux(
+                tmux_binary, socket_name, "respawn-pane", "-k", "-t", origin,
+                "printf 'pane-fast-path\\n'; exec sleep 60",
+            )
+            run_tmux(tmux_binary, socket_name, "send-keys", "-t", floating, "Down", "Down")
+            if not wait_for(
+                lambda: "pane-fast-path" in run_tmux(
+                    tmux_binary, socket_name, "capture-pane", "-p", "-t", floating
+                ), fd, transcript,
+            ):
+                raise RuntimeError("exact-pane preview did not capture updated origin content")
 
         tiled = next(
             pane_id

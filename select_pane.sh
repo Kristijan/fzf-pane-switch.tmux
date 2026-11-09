@@ -1164,7 +1164,8 @@ function select_pane() {
             script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
             quoted_script="$(shell_quote "${script_path}")"
             quoted_origin="$(shell_quote "${TMUX_PANE:?missing origin pane}")"
-            preview_command="preview_target=\$(${quoted_script} --preview-target {1} ${quoted_origin}) && "
+            preview_command="preview_target={1}; case \"\$preview_target\" in %*) ;; "
+            preview_command+="*) preview_target=\$(${quoted_script} --preview-target \"\$preview_target\" ${quoted_origin}) || exit ;; esac; "
             preview_command+="tmux capture-pane -ep -S -\$(( \${FZF_PREVIEW_LINES:-30} )) -t \"\$preview_target\" | "
         else
             preview_command="tmux capture-pane -ep -S -\$(( \${FZF_PREVIEW_LINES:-30} )) -t {1} | "
