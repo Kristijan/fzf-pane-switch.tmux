@@ -32,6 +32,7 @@ setup_test_environment() {
     export PATH="${FIXTURE_BIN}:${PATH}"
     export FZF_STUB_VERSION='0.73.0'
     export TMUX_STUB_VERSION='3.8'
+    export TMUX_PANE='%1'
     export FZF_STUB_ARGS="${CASE_DIR}/fzf-args"
     export FZF_STUB_INPUT="${CASE_DIR}/fzf-input"
     export FZF_STUB_OUTPUT='%1'

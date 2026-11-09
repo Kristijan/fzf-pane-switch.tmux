@@ -141,7 +141,7 @@ Run the suite manually from the repository root:
 bats --pretty tests
 ```
 
-The suite uses included `tmux` and `fzf` stubs, so it does not require a running tmux server or a local fzf installation.
+The suite uses included `tmux` and `fzf` stubs and a deterministic originating pane, so it does not require a running tmux server, an inherited `TMUX_PANE`, or a local fzf installation.
 
 An opt-in integration test requires real tmux, fzf, and Python 3. It exercises capture, filtering, and generation cleanup on an isolated tmux server. Its PTY cases launch the switcher, verify `Ctrl-R` indexing, and exercise floating-pane focus, backdrop cleanup, and stale-state recovery:
 
