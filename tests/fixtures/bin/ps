@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Unit tests use a deterministic process identity; real PTY tests bypass stubs.
+printf 'Thu Jan  1 00:00:00 2026\n'

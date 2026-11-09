@@ -55,6 +55,28 @@ set -g @fzf_pane_switch_window-position "center,70%,80%"
 
 See fzf's [`--tmux` documentation](https://man.archlinux.org/man/fzf.1.en#tmux) for accepted values.
 
+### `@fzf_pane_switch_backdrop-dim`
+
+| Setting              | Options        | Default |
+| -------------------- | -------------- | ------- |
+| Backdrop dim opacity | `1%` to `100%` | Unset   |
+
+```bash
+set -g @fzf_pane_switch_backdrop-dim "60%"
+```
+
+When set, the switcher opens as a non-modal tmux floating pane and dims the other pane contents in its originating window while the switcher has focus. Moving focus to another pane removes the dimming; returning focus reapplies it. The floating pane uses tmux's native border, while the configured `@fzf_pane_switch_window-position` continues to control its size and position.
+
+Dimming is window-scoped, not client-scoped: every client viewing the same window sees the same dimming and focus changes. Selecting a destination switches only the client that opened the switcher.
+
+Both prefix and root bindings launch backdrop mode in the background; disabled backdrop mode retains the modal popup launcher.
+
+This mode requires tmux 3.8 or later and fzf 0.74.5 or later.
+
+Only one switcher may run per window. A later invocation recovers stale style and hook state left by an interrupted switcher, including an interrupted recovery, and closes floating switchers tagged with the dead invocation's identity.
+
+In tree layout, session and window content searches capture the same concrete pane as their preview. The originating scope stays pinned to the pane that opened the switcher; exact-pane previews capture directly without another launcher process.
+
 ### `@fzf_pane_switch_preview-pane`
 
 | Setting      | Options         | Default |
@@ -143,7 +165,7 @@ Press `Alt-J` to display the labels, then press a label to switch immediately. M
 | ----------------- | --------------- | ------- |
 | Pane-list refresh | `true`, `false` | `false` |
 
-When enabled, `Ctrl-R` refreshes the pane list.
+When enabled, `Ctrl-R` refreshes the pane list. The plugin's own floating switchers are excluded from destinations in every layout; unrelated floating panes remain eligible.
 
 ```bash
 set -g @fzf_pane_switch_refresh "true"
