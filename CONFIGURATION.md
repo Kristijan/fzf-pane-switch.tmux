@@ -69,6 +69,8 @@ When set, the switcher opens as a non-modal tmux floating pane and dims the othe
 
 This mode requires tmux 3.8 or later and fzf 0.74.5 or later.
 
+Only one switcher may run per window. A later invocation recovers stale style and hook state left by an interrupted switcher, including an interrupted recovery.
+
 ### `@fzf_pane_switch_preview-pane`
 
 | Setting      | Options         | Default |

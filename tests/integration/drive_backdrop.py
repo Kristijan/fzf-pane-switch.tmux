@@ -95,7 +95,7 @@ def main():
         read_available(fd, transcript)
         os.write(fd, b"\x02s\x02s" if scenario == "double-launch" else b"\x02s")
 
-        if scenario in ("signal-setup", "style-setup"):
+        if scenario in ("signal-setup", "style-setup", "signal-claim"):
             marker = os.environ["BACKDROP_SIGNAL_MARKER"]
             interrupted = wait_for(lambda: os.path.isfile(marker), fd, transcript)
             if not interrupted:
@@ -104,6 +104,8 @@ def main():
                 options = run_tmux(tmux_binary, socket_name, "show-options", "-w", "-t", "integration:0")
                 hooks = run_tmux(tmux_binary, socket_name, "show-hooks", "-w", "-t", "integration:0")
                 expected_style = "window-style fg=green\n" if scenario == "style-setup" else ""
+                if scenario == "signal-claim":
+                    expected_style = "window-style fg=yellow\n"
                 return "backdrop-" not in options and options == expected_style and "fzf-pane-switch" not in hooks
             if not wait_for(cleaned, fd, transcript):
                 raise RuntimeError("interrupted setup left backdrop state or overwrote the external style")

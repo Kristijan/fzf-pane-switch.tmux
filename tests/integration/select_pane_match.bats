@@ -118,6 +118,31 @@ require_backdrop_versions() {
     assert_status 0
 }
 
+@test "real tmux interrupted stale takeover restores the previous owner state" {
+    require_backdrop_versions
+    local hook='window-pane-changed[fzf-pane-switch-99999999]'
+    tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-owner 99999999
+    tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-was-local true
+    tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-previous-style fg=yellow
+    tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-installed-style fg=magenta
+    tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-hook "${hook}"
+    tmux set-hook -w -t integration:0 "${hook}" "set-option -wF -t @0 window-style '#{window-style}'"
+    tmux set-option -w -t integration:0 window-style fg=magenta
+    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
+    export BACKDROP_SIGNAL_MARKER="${BATS_TEST_TMPDIR}/claim-interrupted"
+    tmux set-environment -g REAL_TMUX "${REAL_TMUX}"
+    tmux set-environment -g BACKDROP_SIGNAL_MARKER "${BACKDROP_SIGNAL_MARKER}"
+    tmux set-environment -g BACKDROP_SETUP_ACTION signal-claim
+    tmux set-environment -g PATH "${REPO_DIR}/tests/integration/fixtures:${PATH}"
+    tmux set-environment -gu 'BASH_FUNC_tmux%%'
+    tmux set-option -g default-shell /bin/sh
+    tmux run-shell "${REPO_DIR}/select_pane.tmux"
+    export BACKDROP_SCENARIO=signal-claim
+    run "${REAL_PYTHON}" "${REPO_DIR}/tests/integration/drive_backdrop.py" \
+        "${REAL_TMUX}" "${TMUX_TEST_SOCKET}"
+    assert_status 0
+}
+
 @test "real tmux backdrop setup does not overwrite a racing style change" {
     require_backdrop_versions
     tmux split-window -d -t integration:0

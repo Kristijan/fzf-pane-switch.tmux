@@ -17,6 +17,7 @@ match_directory=''
 match_owner_magic='fzf-pane-switch-v1'
 backdrop_window=''
 backdrop_owner=''
+backdrop_recovery_owner=''
 backdrop_previous_style=''
 backdrop_previous_style_was_local=false
 backdrop_installed_style=''
@@ -853,6 +854,12 @@ function recover_stale_backdrop() {
         installed_style="$(tmux show-option -wqv -t "${window}" "${backdrop_installed_style_option}")"
         hook="$(tmux show-option -wqv -t "${window}" "${backdrop_hook_option}")"
     fi
+    # Cleanup must know the stale snapshot before the server transfers ownership.
+    backdrop_recovery_owner="${owner}"
+    backdrop_previous_style_was_local="${was_local:-false}"
+    backdrop_previous_style="${previous_style}"
+    backdrop_installed_style="${installed_style}"
+    backdrop_hook="${hook}"
     # The comparison and replacement execute together on tmux's server queue.
     # A second launcher cannot clear or reclaim the winning launcher's state.
     claim="set-option -wq -t ${window} ${backdrop_owner_option} $(shell_quote "${backdrop_owner}")"
@@ -871,6 +878,9 @@ function recover_stale_backdrop() {
         restore_backdrop_state "${window}" "${owner}" "${was_local}" \
             "${previous_style}" "${installed_style}" "${hook}" keep-owner
     fi
+    backdrop_recovery_owner=''
+    backdrop_installed_style=''
+    backdrop_hook=''
 }
 
 # Applies a conditional window style while the marked floating switcher is the
@@ -940,7 +950,7 @@ function cleanup_backdrop() {
     current_owner="$(tmux show-option -wqv -t "${backdrop_window}" "${backdrop_owner_option}" 2>/dev/null)"
     [[ -n "${backdrop_owner}" && "${current_owner}" == "${backdrop_owner}" ]] || return 0
 
-    restore_backdrop_state "${backdrop_window}" "${backdrop_owner}" \
+    restore_backdrop_state "${backdrop_window}" "${backdrop_recovery_owner:-${backdrop_owner}}" \
         "${backdrop_previous_style_was_local}" "${backdrop_previous_style}" \
         "${backdrop_installed_style}" "${backdrop_hook}"
     backdrop_window=''
