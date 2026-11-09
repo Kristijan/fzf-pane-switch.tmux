@@ -787,13 +787,13 @@ function cleanup_match_directory() {
     match_directory=''
 }
 
-# Escapes arbitrary text for use as one literal tmux format operand.
+# Assigns an escaped tmux format operand to the caller's named variable.
 function format_literal() {
-    local value="$1"
+    local value="$2"
     value="${value//#/##}"
     value="${value//,/#,}"
     value="${value//\}/#\}}"
-    printf '%s' "${value}"
+    printf -v "$1" '%s' "${value}"
 }
 
 # Clears the window-scoped recovery record in one server command list.
@@ -815,14 +815,15 @@ function clear_backdrop_metadata() {
 
 # Only reclaim floating panes carrying this invocation's full process identity.
 function reclaim_backdrop_panes() {
-    local window="$1" owner="$2" pane floating pane_owner origin
+    local window="$1" owner="$2" pane floating pane_owner origin literal
     while IFS=$'\t' read -r pane floating pane_owner origin; do
         [[ "${floating}" == 1 && "${pane_owner}" == "${owner}" ]] || continue
         if [[ "${TMUX_PANE:-}" == "${pane}" && "${origin}" =~ ^%[0-9]+$ ]]; then
             export TMUX_PANE="${origin}"
         fi
+        format_literal literal "${owner}"
         tmux if-shell -F -t "${pane}" \
-            "#{==:#{@fzf_pane_switch_backdrop-pane-owner},$(format_literal "${owner}")}" \
+            "#{==:#{@fzf_pane_switch_backdrop-pane-owner},${literal}}" \
             "kill-pane -t ${pane}" 2>/dev/null
     done < <(tmux list-panes -t "${window}" \
         -F $'#{pane_id}\t#{pane_floating_flag}\t#{@fzf_pane_switch_backdrop-pane-owner}\t#{@fzf_pane_switch_backdrop-origin}' 2>/dev/null)
@@ -832,7 +833,7 @@ function reclaim_backdrop_panes() {
 # A user or plugin change made after installation therefore wins.
 function restore_backdrop_state() {
     local window="$1" owner="$2" was_local="$3" previous_style="$4" installed_style="$5" hook="$6"
-    local expected_hook expected_command restore_command
+    local expected_hook expected_command restore_command literal
     reclaim_backdrop_panes "${window}" "${owner}"
     if [[ -n "${installed_style}" ]]; then
         if [[ "${was_local}" == true ]]; then
@@ -840,15 +841,17 @@ function restore_backdrop_state() {
         else
             restore_command="set-option -wu -t ${window} window-style"
         fi
+        format_literal literal "${installed_style}"
         tmux if-shell -F -t "${window}" \
-            "#{==:#{window-style},$(format_literal "${installed_style}")}" \
+            "#{==:#{window-style},${literal}}" \
             "${restore_command}" 2>/dev/null
     fi
     expected_hook="window-pane-changed[fzf-pane-switch-${owner%%:*}]"
     expected_command="set-option -Fw -t ${window} window-style \"#{window-style}\""
     if [[ "${hook}" == "${expected_hook}" ]]; then
+        format_literal literal "${expected_command}"
         tmux if-shell -F -t "${window}" \
-            "#{==:#{${hook}},$(format_literal "${expected_command}")}" \
+            "#{==:#{${hook}},${literal}}" \
             "set-hook -wu -t ${window} $(shell_quote "${hook}")" 2>/dev/null
     fi
     clear_backdrop_metadata "${window}" "${7:-}"
@@ -882,9 +885,7 @@ function recover_stale_backdrop() {
     # The comparison and replacement execute together on tmux's server queue.
     # A second launcher cannot clear or reclaim the winning launcher's state.
     claim="set-option -wq -t ${window} ${backdrop_owner_option} $(shell_quote "${backdrop_owner}")"
-    owner_format="${owner//#/##}"
-    owner_format="${owner_format//,/#,}"
-    owner_format="${owner_format//\}/#\}}"
+    format_literal owner_format "${owner}"
     claimed_owner="$(tmux if-shell -F -t "${window}" \
         "#{==:#{${backdrop_owner_option}},${owner_format}}" "${claim}" \; \
         show-option -wqv -t "${window}" "${backdrop_owner_option}")"
@@ -905,7 +906,7 @@ function recover_stale_backdrop() {
 # Applies a conditional window style while the marked floating switcher is the
 # active pane. The original local/inherited state is retained for cleanup.
 function setup_backdrop() {
-    local snapshot initial_owner local_style_line condition hook_command installation argument installed process_start
+    local snapshot initial_owner local_style_line condition hook_command installation argument installed process_start literal
     local -a installation_commands
     snapshot="$(tmux display-message -p -t "${TMUX_PANE:?missing origin pane}" \
         $'#{window_id}\n#{@fzf_pane_switch_backdrop-owner}')" || return 1
@@ -960,8 +961,9 @@ function setup_backdrop() {
     done
     # Abort setup if another actor changed the style since our snapshot. The
     # comparison and installation run on the same server command queue.
+    format_literal literal "${backdrop_previous_style}"
     installed="$(tmux if-shell -F -t "${backdrop_window}" \
-        "#{==:#{window-style},$(format_literal "${backdrop_previous_style}")}" \
+        "#{==:#{window-style},${literal}}" \
         "${installation}" "display-message 'Window style changed while opening pane switcher'")"
     if [[ "${installed}" != installed ]]; then
         cleanup_backdrop
