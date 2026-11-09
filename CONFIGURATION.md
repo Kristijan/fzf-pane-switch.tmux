@@ -67,6 +67,8 @@ set -g @fzf_pane_switch_backdrop-dim "60%"
 
 When set, the switcher opens as a non-modal tmux floating pane and dims the other pane contents in its originating window while the switcher has focus. Moving focus to another pane removes the dimming; returning focus reapplies it. The floating pane uses tmux's native border, while the configured `@fzf_pane_switch_window-position` continues to control its size and position.
 
+Dimming is window-scoped, not client-scoped: every client viewing the same window sees the same dimming and focus changes. Selecting a destination switches only the client that opened the switcher.
+
 This mode requires tmux 3.8 or later and fzf 0.74.5 or later.
 
 Only one switcher may run per window. A later invocation recovers stale style and hook state left by an interrupted switcher, including an interrupted recovery, and closes floating switchers tagged with the dead invocation's identity.
