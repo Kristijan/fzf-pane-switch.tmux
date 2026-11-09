@@ -99,6 +99,32 @@ require_backdrop_versions() {
     assert_status 0
 }
 
+refresh_candidates_case() {
+    require_backdrop_versions
+    tmux split-window -d -t integration:0
+    tmux set-option -g window-style fg=cyan
+    tmux set-option -g @fzf_pane_switch_preview-pane false
+    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
+    tmux set-option -g @fzf_pane_switch_refresh true
+    tmux set-option -g @fzf_pane_switch_layout "$1"
+    tmux set-option -g @fzf_pane_switch_preview-pane-match "$2"
+    tmux set-option -g @fzf_pane_switch_list-panes-format 'pane_id pane_title'
+    tmux set-option -g @fzf_pane_switch_row-1-format 'pane_id pane_title'
+    tmux set-option -g @fzf_pane_switch_tree-pane-format 'pane_id pane_title'
+    tmux run-shell "${REPO_DIR}/select_pane.tmux"
+    export BACKDROP_SCENARIO=refresh-candidates
+    run "${REAL_PYTHON}" "${REPO_DIR}/tests/integration/drive_backdrop.py" \
+        "${REAL_TMUX}" "${TMUX_TEST_SOCKET}"
+    assert_status 0
+}
+
+bats_test_function --description 'real tmux refresh excludes switchers in one-row' -- refresh_candidates_case one-row false
+bats_test_function --description 'real tmux refresh excludes switchers in two-row' -- refresh_candidates_case two-row false
+bats_test_function --description 'real tmux refresh excludes switchers in tree' -- refresh_candidates_case tree false
+bats_test_function --description 'real tmux content refresh excludes switchers in one-row' -- refresh_candidates_case one-row true
+bats_test_function --description 'real tmux content refresh excludes switchers in two-row' -- refresh_candidates_case two-row true
+bats_test_function --description 'real tmux content refresh excludes switchers in tree' -- refresh_candidates_case tree true
+
 @test "real tmux backdrop preserves a replaced hook" {
     require_backdrop_versions
     tmux split-window -d -t integration:0

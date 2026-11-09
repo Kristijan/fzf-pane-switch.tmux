@@ -161,7 +161,7 @@ Press `Alt-J` to display the labels, then press a label to switch immediately. M
 | ----------------- | --------------- | ------- |
 | Pane-list refresh | `true`, `false` | `false` |
 
-When enabled, `Ctrl-R` refreshes the pane list.
+When enabled, `Ctrl-R` refreshes the pane list. The plugin's own floating switchers are excluded from destinations in every layout; unrelated floating panes remain eligible.
 
 ```bash
 set -g @fzf_pane_switch_refresh "true"

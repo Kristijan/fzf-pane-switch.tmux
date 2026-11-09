@@ -113,7 +113,14 @@ case "${1:-}" in
             exit "${TMUX_STUB_LIST_STATUS}"
         fi
         if [[ "${TMUX_STUB_EXPAND_FORMAT:-false}" == 'true' ]]; then
-            pane_format="${*: -1}"
+            pane_format=''
+            for ((index = 1; index < $#; index++)); do
+                if [[ "${!index}" == -F || "${!index}" == -aF ]]; then
+                    ((index += 1))
+                    pane_format="${!index}"
+                    break
+                fi
+            done
             pane_format="${pane_format//'#{pane_id}'/'%1'}"
             pane_format="${pane_format//'#{pane_title}'/'Title'}"
             pane_format="${pane_format//'#{pane_current_command}'/'nvim'}"

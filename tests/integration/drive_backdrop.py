@@ -155,6 +155,19 @@ def main():
             if len(marked) != 1 or hooks.count("fzf-pane-switch-") != 1:
                 raise RuntimeError(f"duplicate launch corrupted state: {marked!r}; {hooks!r}")
 
+        if scenario == "refresh-candidates":
+            origin = next(row[0] for row in pane_rows(tmux_binary, socket_name) if row[1] == "0")
+            run_tmux(tmux_binary, socket_name, "select-pane", "-t", origin, "-T", "refresh-ready")
+            run_tmux(tmux_binary, socket_name, "send-keys", "-t", floating, "C-r")
+            screen = wait_for(
+                lambda: (screen if "refresh-ready" in (screen := run_tmux(
+                    tmux_binary, socket_name, "capture-pane", "-p", "-t", floating
+                )) and "Indexing content" not in screen else None),
+                fd, transcript,
+            )
+            if not screen or floating in screen or origin not in screen:
+                raise RuntimeError(f"refreshed destinations included the switcher or lost the origin: {screen!r}")
+
         if expected_preview_token:
             # Inspect the floating pane's actual screen grid. Counting terminal
             # bytes can miss a valid preview when tmux sends incremental redraws.

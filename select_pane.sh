@@ -186,7 +186,7 @@ function generate_structured_records() {
     while IFS= read -r -d "${record_separator}" record; do
         record="${record#$'\n'}"
         printf '%s\0' "${record}"
-    done < <(tmux list-panes -aF "${pane_format}")
+    done < <(tmux list-panes -aF "${pane_format}" -f '#{!=:#{@fzf_pane_switch_backdrop},1}')
 }
 
 # Emits the permanently expanded Session > Window > Pane hierarchy as
@@ -202,7 +202,7 @@ function generate_tree_records() {
         {
             tmux list-sessions -F "session${field_separator}#{session_id}${field_separator}#{session_name}${field_separator}${session_format}"
             tmux list-windows -aF "window${field_separator}#{session_id}${field_separator}#{window_id}${field_separator}#{window_name}${field_separator}${window_format}"
-            tmux list-panes -aF "pane${field_separator}#{window_id}${field_separator}#{pane_id}${field_separator}${pane_format}"
+            tmux list-panes -aF "pane${field_separator}#{window_id}${field_separator}#{pane_id}${field_separator}${pane_format}" -f '#{!=:#{@fzf_pane_switch_backdrop},1}'
         } | awk -F "${field_separator}" \
             -v field_separator="${field_separator}" \
             -v record_separator="${record_separator}" \
@@ -265,7 +265,7 @@ function generate_records() {
             "${FZF_PANE_SWITCH_TREE_WINDOW_FORMAT:?missing window format}" \
             "${FZF_PANE_SWITCH_TREE_PANE_FORMAT:?missing tree pane format}"
     else
-        tmux list-panes -aF "${pane_format}"
+        tmux list-panes -aF "${pane_format}" -f '#{!=:#{@fzf_pane_switch_backdrop},1}'
     fi
 }
 
