@@ -73,12 +73,17 @@ require_backdrop_versions() {
     fi
 }
 
-@test "real tmux rapid backdrop invocations leave exactly one owner and clean up" {
+# Configure defaults only; load the plugin after each scenario's mutations.
+configure_backdrop() {
     require_backdrop_versions
     tmux split-window -d -t integration:0
-    tmux set-option -g window-style 'fg=cyan'
+    tmux set-option -g window-style fg=cyan
     tmux set-option -g @fzf_pane_switch_preview-pane false
     tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
+}
+
+@test "real tmux rapid backdrop invocations leave exactly one owner and clean up" {
+    configure_backdrop
     tmux run-shell "${REPO_DIR}/select_pane.tmux"
     export BACKDROP_SCENARIO=double-launch
     run "${REAL_PYTHON}" "${REPO_DIR}/tests/integration/drive_backdrop.py" \
@@ -87,11 +92,7 @@ require_backdrop_versions() {
 }
 
 @test "real tmux stale recovery reclaims only the orphaned switcher" {
-    require_backdrop_versions
-    tmux split-window -d -t integration:0
-    tmux set-option -g window-style 'fg=cyan'
-    tmux set-option -g @fzf_pane_switch_preview-pane false
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
+    configure_backdrop
     tmux run-shell "${REPO_DIR}/select_pane.tmux"
     export BACKDROP_SCENARIO=orphan-recovery
     run "${REAL_PYTHON}" "${REPO_DIR}/tests/integration/drive_backdrop.py" \
@@ -100,11 +101,7 @@ require_backdrop_versions() {
 }
 
 refresh_candidates_case() {
-    require_backdrop_versions
-    tmux split-window -d -t integration:0
-    tmux set-option -g window-style fg=cyan
-    tmux set-option -g @fzf_pane_switch_preview-pane false
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
+    configure_backdrop
     tmux set-option -g @fzf_pane_switch_refresh true
     tmux set-option -g @fzf_pane_switch_layout "$1"
     tmux set-option -g @fzf_pane_switch_preview-pane-match "$2"
@@ -126,11 +123,7 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
 bats_test_function --description 'real tmux content refresh excludes switchers in tree' -- refresh_candidates_case tree true
 
 @test "real tmux backdrop preserves a replaced hook" {
-    require_backdrop_versions
-    tmux split-window -d -t integration:0
-    tmux set-option -g window-style 'fg=cyan'
-    tmux set-option -g @fzf_pane_switch_preview-pane false
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
+    configure_backdrop
     tmux run-shell "${REPO_DIR}/select_pane.tmux"
     export BACKDROP_SCENARIO=replace-hook
     run "${REAL_PYTHON}" "${REPO_DIR}/tests/integration/drive_backdrop.py" \
@@ -139,11 +132,7 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
 }
 
 @test "real tmux signal during backdrop setup restores state" {
-    require_backdrop_versions
-    tmux split-window -d -t integration:0
-    tmux set-option -g window-style 'fg=cyan'
-    tmux set-option -g @fzf_pane_switch_preview-pane false
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
+    configure_backdrop
     export BACKDROP_SIGNAL_MARKER="${BATS_TEST_TMPDIR}/setup-interrupted"
     tmux set-environment -g REAL_TMUX "${REAL_TMUX}"
     tmux set-environment -g BACKDROP_SIGNAL_MARKER "${BACKDROP_SIGNAL_MARKER}"
@@ -158,7 +147,7 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
 }
 
 @test "real tmux interrupted stale takeover restores the previous owner state" {
-    require_backdrop_versions
+    configure_backdrop
     local hook='window-pane-changed[fzf-pane-switch-99999999]'
     tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-owner 99999999
     tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-was-local true
@@ -167,7 +156,6 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
     tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-hook "${hook}"
     tmux set-hook -w -t integration:0 "${hook}" "set-option -wF -t @0 window-style '#{window-style}'"
     tmux set-option -w -t integration:0 window-style fg=magenta
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
     export BACKDROP_SIGNAL_MARKER="${BATS_TEST_TMPDIR}/claim-interrupted"
     tmux set-environment -g REAL_TMUX "${REAL_TMUX}"
     tmux set-environment -g BACKDROP_SIGNAL_MARKER "${BACKDROP_SIGNAL_MARKER}"
@@ -183,11 +171,7 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
 }
 
 @test "real tmux backdrop setup does not overwrite a racing style change" {
-    require_backdrop_versions
-    tmux split-window -d -t integration:0
-    tmux set-option -g window-style 'fg=cyan'
-    tmux set-option -g @fzf_pane_switch_preview-pane false
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
+    configure_backdrop
     export BACKDROP_SIGNAL_MARKER="${BATS_TEST_TMPDIR}/setup-interrupted"
     tmux set-environment -g REAL_TMUX "${REAL_TMUX}"
     tmux set-environment -g BACKDROP_SIGNAL_MARKER "${BACKDROP_SIGNAL_MARKER}"
@@ -203,12 +187,8 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
 }
 
 @test "real tmux backdrop recovers an owner PID with a different start time" {
-    require_backdrop_versions
-    tmux split-window -d -t integration:0
-    tmux set-option -g window-style 'fg=cyan'
+    configure_backdrop
     tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-owner "$$:old-process-start"
-    tmux set-option -g @fzf_pane_switch_preview-pane false
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
     tmux run-shell "${REPO_DIR}/select_pane.tmux"
     run "${REAL_PYTHON}" "${REPO_DIR}/tests/integration/drive_backdrop.py" \
         "${REAL_TMUX}" "${TMUX_TEST_SOCKET}"
@@ -216,12 +196,9 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
 }
 
 @test "real tmux backdrop restores a local style containing nested formats" {
-    require_backdrop_versions
+    configure_backdrop
     local original_style='fg=cyan,bg=default #{?pane_active,bold,none}'
-    tmux split-window -d -t integration:0
     tmux set-option -w -t integration:0 window-style "${original_style}"
-    tmux set-option -g @fzf_pane_switch_preview-pane false
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
     tmux run-shell "${REPO_DIR}/select_pane.tmux"
     run "${REAL_PYTHON}" "${REPO_DIR}/tests/integration/drive_backdrop.py" \
         "${REAL_TMUX}" "${TMUX_TEST_SOCKET}" 'fg=cyan' "${original_style}"
@@ -229,12 +206,8 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
 }
 
 @test "real tmux backdrop selection targets only the originating client" {
-    require_backdrop_versions
-    tmux split-window -d -t integration:0
+    configure_backdrop
     tmux new-session -d -s observer
-    tmux set-option -g window-style 'fg=cyan'
-    tmux set-option -g @fzf_pane_switch_preview-pane false
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
     tmux run-shell "${REPO_DIR}/select_pane.tmux"
     export BACKDROP_SCENARIO=multi-client
     run "${REAL_PYTHON}" "${REPO_DIR}/tests/integration/drive_backdrop.py" \
@@ -280,12 +253,7 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
 }
 
 @test "real tmux floating switcher dims on focus and restores window state" {
-    require_backdrop_versions
-
-    tmux split-window -d -t integration:0
-    tmux set-option -g window-style 'fg=cyan'
-    tmux set-option -g @fzf_pane_switch_preview-pane false
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
+    configure_backdrop
     tmux run-shell "${REPO_DIR}/select_pane.tmux"
 
     run "${REAL_PYTHON}" "${REPO_DIR}/tests/integration/drive_backdrop.py" \
@@ -295,11 +263,10 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
 }
 
 @test "real tmux floating switcher recovers stale backdrop state" {
-    require_backdrop_versions
+    configure_backdrop
     local stale_hook
 
     stale_hook='window-pane-changed[fzf-pane-switch-99999999]'
-    tmux split-window -d -t integration:0
     tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-owner 99999999
     tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-was-local true
     tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-previous-style 'fg=yellow'
@@ -307,8 +274,6 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
     tmux set-option -w -t integration:0 @fzf_pane_switch_backdrop-hook "${stale_hook}"
     tmux set-hook -w -t integration:0 "${stale_hook}" "set-option -wF -t @0 window-style '#{window-style}'"
     tmux set-option -w -t integration:0 window-style 'fg=magenta'
-    tmux set-option -g @fzf_pane_switch_preview-pane false
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
     tmux run-shell "${REPO_DIR}/select_pane.tmux"
 
     run "${REAL_PYTHON}" "${REPO_DIR}/tests/integration/drive_backdrop.py" \
@@ -318,12 +283,7 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
 }
 
 @test "real tmux floating switcher preserves a concurrent style change" {
-    require_backdrop_versions
-
-    tmux split-window -d -t integration:0
-    tmux set-option -g window-style 'fg=cyan'
-    tmux set-option -g @fzf_pane_switch_preview-pane false
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
+    configure_backdrop
     tmux run-shell "${REPO_DIR}/select_pane.tmux"
 
     run "${REAL_PYTHON}" "${REPO_DIR}/tests/integration/drive_backdrop.py" \
@@ -333,14 +293,10 @@ bats_test_function --description 'real tmux content refresh excludes switchers i
 }
 
 @test "real tmux floating tree previews and indexes the originating pane" {
-    require_backdrop_versions
-
-    tmux split-window -d -t integration:0
-    tmux set-option -g window-style 'fg=cyan'
+    configure_backdrop
     tmux set-option -g @fzf_pane_switch_preview-pane true
     tmux set-option -g @fzf_pane_switch_preview-pane-match true
     tmux set-option -g @fzf_pane_switch_layout tree
-    tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
     export BACKDROP_SCENARIO=tree-index
     export BACKDROP_INDEX_ROOT="${BATS_TEST_TMPDIR}"
     tmux set-environment -g TMPDIR "${BACKDROP_INDEX_ROOT}"
