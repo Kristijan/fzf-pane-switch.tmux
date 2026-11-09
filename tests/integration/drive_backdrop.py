@@ -2,6 +2,7 @@
 """Exercise floating-pane backdrop state through an attached tmux client."""
 
 import os
+from pathlib import Path
 import pty
 import select
 import signal
@@ -193,6 +194,25 @@ def main():
                     "initial preview did not render the originating pane token; "
                     f"session target resolved to {resolved}, origin was {origin}"
                 )
+
+        if scenario == "tree-index":
+            origin = next(row[0] for row in pane_rows(tmux_binary, socket_name) if row[1] == "0")
+            targets = run_tmux(
+                tmux_binary, socket_name, "display-message", "-p", "-t", origin,
+                "#{session_id} #{window_id} #{pane_id}",
+            ).strip().split()
+
+            def indexed_origin_content():
+                for index in Path(os.environ["BACKDROP_INDEX_ROOT"]).glob("fzf-pane-switch.*/index.1"):
+                    records = [record.split(b"\x1f") for record in index.read_bytes().split(b"\0") if record]
+                    if all(any(record[0].decode() == target and
+                               expected_preview_token.encode() in record[3]
+                               for record in records) for target in targets):
+                        return True
+                return False
+
+            if not wait_for(indexed_origin_content, fd, transcript):
+                raise RuntimeError("tree session/window/pane content did not match the origin preview")
 
         tiled = next(
             pane_id

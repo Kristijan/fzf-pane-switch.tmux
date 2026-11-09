@@ -306,7 +306,7 @@ require_backdrop_versions() {
     assert_status 0
 }
 
-@test "real tmux floating switcher initially previews the originating pane" {
+@test "real tmux floating tree previews and indexes the originating pane" {
     require_backdrop_versions
 
     tmux split-window -d -t integration:0
@@ -315,6 +315,9 @@ require_backdrop_versions() {
     tmux set-option -g @fzf_pane_switch_preview-pane-match true
     tmux set-option -g @fzf_pane_switch_layout tree
     tmux set-option -g @fzf_pane_switch_backdrop-dim '60%'
+    export BACKDROP_SCENARIO=tree-index
+    export BACKDROP_INDEX_ROOT="${BATS_TEST_TMPDIR}"
+    tmux set-environment -g TMPDIR "${BACKDROP_INDEX_ROOT}"
     tmux run-shell "${REPO_DIR}/select_pane.tmux"
     export EXPECTED_PREVIEW_TOKEN='integration-alpha'
 

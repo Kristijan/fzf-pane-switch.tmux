@@ -493,6 +493,10 @@ function capture_match_index_worker() {
             continue
         fi
         target="${record%%"${field_separator}"*}"
+        if [[ "${FZF_PANE_SWITCH_LAYOUT:-}" == tree &&
+            -n "${FZF_PANE_SWITCH_ORIGIN_PANE:-}" && "${target}" != %* ]]; then
+            target="$(resolve_preview_target "${target}" "${FZF_PANE_SWITCH_ORIGIN_PANE}")" || return 1
+        fi
         printf '%s%s' "${record}" "${field_separator}"
         if ! tmux capture-pane -p -S "-${line_count}" -t "${target}" 2>/dev/null; then
             return 1
@@ -1129,8 +1133,10 @@ function select_pane() {
         trap cleanup_invocation EXIT
         trap 'exit 130' HUP INT TERM
     fi
+    export FZF_PANE_SWITCH_ORIGIN_PANE=''
     if [[ -n "${backdrop_dim:-}" ]]; then
         setup_backdrop || return 1
+        export FZF_PANE_SWITCH_ORIGIN_PANE="${TMUX_PANE}"
     fi
 
     if [[ "${content_matching}" == 'true' ]]; then
